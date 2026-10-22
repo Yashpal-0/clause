@@ -384,9 +384,11 @@ The store at `~/.claude/pending-edits/` (override with `CLAUDE_PENDING_EDITS_DIR
 each file Claude changed, as it was before, until you Keep or Discard. That includes files such as
 `.env` if Claude edits them. Next to each copy is a `touched` note with a time, a tool call id and a
 line number, and no path or content, and a `sessions` note with the folders Claude sessions were
-started in (paths, never file contents). Everything stays on your machine, in files and directories
-only you can read (modes 0600 and 0700). Hook failures are written to `errors.log` in the same
-folder, without file contents.
+started in (paths, never file contents). Each Discard is appended to `discards.jsonl` (time, file
+path, and the kind of block with its line number, never content), and for each Claude session the
+plugin keeps how far it has read that log, which is how your next prompt can tell Claude what you
+discarded. Everything stays on your machine, in files and directories only you can read (modes 0600
+and 0700). Hook failures are written to `errors.log` in the same folder, without file contents.
 
 Deleting the folder clears all pending state. Every file keeps whatever it contains on disk.
 

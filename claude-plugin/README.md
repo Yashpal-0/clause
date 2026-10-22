@@ -47,7 +47,8 @@ permissions.
   session, a position in the log of Discards. Failures go to `errors.log` there, without file
   contents. Everything is readable only by you (modes 0600 and 0700).
 - **Reads**: the files Claude edits, the hook payload Claude Code passes in, and the log of
-  Discards that the extension writes.
+  Discards that the extension writes (time, file path, and the kind of block with its line number,
+  never content).
 - **Sends**: nothing. No network calls, no telemetry, no accounts.
 - **Clears**: when a file's last pending block is kept or discarded, its copy is deleted. Deleting
   the folder clears all pending state; every file keeps whatever it contains on disk.
