@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 interface Manifest {
+  name: string;
+  publisher: string;
   icon?: string;
   dependencies?: Record<string, string>;
   contributes: {
@@ -173,6 +175,18 @@ test('the extension icon is a square PNG of at least 128 px that the package kee
   assert.ok(width >= 128, `the icon is ${width} px wide; the Marketplace wants at least 128`);
   const kept = readFileSync(new URL('../../.vscodeignore', import.meta.url), 'utf8').split('\n').map((line) => line.trim());
   assert.ok(kept.includes(`!${manifest.icon}`), '.vscodeignore keeps the icon in the package');
+});
+
+test('every file that quotes the extension ID quotes the one the manifest declares', () => {
+  // The ID is publisher.name, and the editor matches it exactly: a stale copy in the README's argv.json
+  // entry silently leaves the inline view off, and one in the test setup runs the tests with no extension.
+  const id = `${manifest.publisher}.${manifest.name}`;
+  for (const file of ['../../../README.md', '../../src/ui/insets.ts', '../../.vscode-test.mjs', '../integration/helpers.ts']) {
+    const quoted = readFileSync(new URL(file, import.meta.url), 'utf8').match(/\b[a-z0-9-]+\.clause\b/g) ?? [];
+
+    assert.ok(quoted.length > 0, `${file} no longer quotes the ID; take it out of this list`);
+    for (const found of quoted) assert.equal(found, id, `${file} quotes ${found}`);
+  }
 });
 
 test('Review All Changes is a command with a button in the title of the panel, first among them, and an entry in the palette while anything is pending', () => {

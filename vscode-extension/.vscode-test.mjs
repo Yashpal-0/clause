@@ -56,7 +56,7 @@ export default defineConfig([
   // The editor as most users have it: the extension has not been allowed to use the editorInsets proposal.
   run('default', 'out/test/integration/*.test.js'),
   // The editor as the README sets it up. Only the editor's own flag can allow a proposal; the manifest cannot.
-  run('proposed', 'out/test/integration/proposed/*.test.js', { extraArguments: ['--enable-proposed-api', 'local.clause'] }),
+  run('proposed', 'out/test/integration/proposed/*.test.js', { extraArguments: ['--enable-proposed-api', 'clause.clause'] }),
   // The editor closed with changes still pending, then opened again. These two must run in this order and in
   // one `vscode-test` invocation: starting an invocation wipes the scratch directories.
   run('restart-seed', 'out/test/integration/restart/seed.test.js', { scratchKey: 'restart' }),
