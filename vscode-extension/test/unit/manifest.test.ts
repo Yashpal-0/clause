@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 interface Manifest {
+  dependencies?: Record<string, string>;
   contributes: {
     commands?: { command: string; title: string; icon?: string }[];
     menus?: Record<string, { command: string; when?: string; group?: string }[]>;
@@ -121,4 +122,15 @@ test('Ctrl+Y keeps the selected lines when the selection has pending lines, and 
 test('Keep Selected Lines is in the editor menu and the command palette only while the selection has pending lines', () => {
   assert.equal(inMenu('editor/context', 'clause.keepSelection')?.when, 'clause.selectionInPending');
   assert.equal(inMenu('commandPalette', 'clause.keepSelection')?.when, 'clause.selectionInPending');
+});
+
+test('the package carries the license of Clause and of every dependency the bundle inlines', () => {
+  // The bundle inlines every runtime dependency, and their licenses ask for their notice to go wherever the code goes.
+  const kept = readFileSync(new URL('../../.vscodeignore', import.meta.url), 'utf8').split('\n').map((line) => line.trim());
+  for (const file of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) assert.ok(kept.includes(`!${file}`), `.vscodeignore keeps ${file} in the package`);
+
+  const notices = readFileSync(new URL('../../THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8');
+  const dependencies = Object.keys(manifest.dependencies ?? {});
+  assert.ok(dependencies.length > 0, 'the scan found no dependencies; it may be looking in the wrong place');
+  for (const name of dependencies) assert.ok(notices.includes(`\`${name}\``), `THIRD_PARTY_NOTICES.md has a section for ${name}`);
 });

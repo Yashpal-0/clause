@@ -72,7 +72,7 @@ git clone https://github.com/Yashpal-0/clause.git
 cd clause/vscode-extension
 npm install
 npm run build
-npx vsce package --no-dependencies --allow-missing-repository --skip-license
+npx vsce package --no-dependencies --allow-missing-repository
 code --install-extension clause-0.1.0.vsix      # VS Code
 cursor --install-extension clause-0.1.0.vsix    # Cursor
 ```
@@ -399,3 +399,7 @@ why `CLAUDE_PENDING_EDITS_DIR` exists.
 ## License
 
 [MIT](LICENSE) © 2026 Yashpal Yadav. Use it, fork it, ship it.
+
+The extension bundles [jsdiff](https://github.com/kpdecker/jsdiff) (BSD-3-Clause). Its notice is in
+[`vscode-extension/THIRD_PARTY_NOTICES.md`](vscode-extension/THIRD_PARTY_NOTICES.md) and ships
+inside the `.vsix`.
