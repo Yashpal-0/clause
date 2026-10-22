@@ -1,22 +1,162 @@
+<div align="center">
+
 # Clause
 
-Review everything Claude Code changed, after the fact, the way Cursor does. Claude's edits land on
-disk right away. Every change stays **pending** until you click **Keep** or **Discard**, per block,
-per file or all at once, no matter how many prompts, Claude sessions or editor restarts come in
-between.
+### Every edit Claude Code makes is a clause you haven't signed yet.
 
-Claude Code decides at edit time: you approve an edit in the terminal and it leaves your view.
-`/rewind` restores whole turns and `/diff` only shows changes. This project adds the missing step: a
-review that stays open until you close it.
+Claude writes straight to disk, at full speed. Clause keeps each of those changes **pending**,
+inline in your editor, until you **Keep** it or **Discard** it: one block, one file, or all at
+once. Close Claude, close the editor, reboot. Your review is right where you left it.
 
-It has two parts, and you need both:
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![VS Code 1.100+ and Cursor](https://img.shields.io/badge/VS%20Code%201.100%2B%20%7C%20Cursor-extension-007ACC?logo=visualstudiocode&logoColor=white)](#quick-start)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D97757?logo=claude&logoColor=white)](#quick-start)
+[![Plugin dependencies: 0](https://img.shields.io/badge/plugin%20dependencies-0-brightgreen.svg)](claude-plugin/)
 
-- **`claude-plugin/`** is a Claude Code plugin. Its hooks save what each file looked like before
-  Claude's first change to it.
-- **`vscode-extension/`** is a VS Code and Cursor extension. It shows the difference between that
-  saved copy and the file as Keep/Discard blocks.
+</div>
 
-## What it looks like
+```diff
+  export function cartTotal(items: Item[]): number {
+-   return items.reduce((sum, item) => sum + item.price, 0);
++   return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  }
+                                 ^ 1 of 2 v  |  Discard Ctrl+N  |  Keep Ctrl+Y
+```
+
+<p align="center"><em>Green is what Claude wrote. Red is what it replaced, back where it was. The bar is your call.</em></p>
+
+## Why Clause
+
+Claude Code asks for your approval at the moment it edits, and then the change scrolls away.
+`/rewind` restores whole turns; `/diff` only shows. Switch to *accept edits* mode and you gain
+speed but lose track of what changed.
+
+Clause gives you both. Claude keeps its pace, and you get the review Cursor users know: inline,
+block by block, open until **you** close it. Like a contract you read clause by clause before you
+sign. Hence the name.
+
+## How it feels
+
+1. Ask Claude for a change. It edits four files and keeps going.
+2. The file it just touched opens at the change: Claude's lines in green, the old ones in red,
+   right where they were. Your keyboard focus stays in the terminal.
+3. `Ctrl+Y` keeps a block. `Ctrl+N` discards it. Select two lines inside a block and `Ctrl+Y`
+   keeps just those. `Alt+L` takes you to the next file.
+4. Not now? Close everything. Tomorrow, after a reboot, every block you haven't decided on is
+   still waiting.
+
+## Highlights
+
+- **Survives everything.** Pending state lives in files on disk, not in a process. Quit Claude,
+  close the editor, crash it, reboot: the same blocks come back.
+- **Claude hears about your Discards.** Your next prompt tells Claude which files lost changes, so
+  it re-reads them instead of building on code that is gone.
+- **Find every change at a glance.** A violet `◆` marks each file with pending changes in the file
+  tree and on its tab, and the folders above it turn violet too. Git's letters stay where they are.
+- **One list, one click.** The Clause view in the Source Control sidebar lists every file and
+  block, with Keep All and Discard All at the top.
+- **Safe to say no.** Discard goes through the editor, so `Ctrl+Z` brings a block back. A file
+  Claude created goes to the trash when discarded, never deleted outright.
+- **Yours alone.** Everything stays in `~/.claude/pending-edits/` on your machine, readable only by
+  you. No network calls. The plugin has zero dependencies, just Node's built-in modules.
+
+## Quick start
+
+You need Claude Code, Node.js on the `PATH` of the process that starts Claude Code, and VS Code
+1.100+ or Cursor. Details are under [Requirements](#requirements).
+
+**1. Build and install the extension**
+
+```sh
+git clone https://github.com/Yashpal-0/clause.git
+cd clause/vscode-extension
+npm install
+npm run build
+npx vsce package --no-dependencies --allow-missing-repository --skip-license
+code --install-extension claude-pending-edits-0.1.0.vsix      # VS Code
+cursor --install-extension claude-pending-edits-0.1.0.vsix    # Cursor
+```
+
+**2. Allow the proposed API (once per editor)**
+
+The red rows and the bar are drawn with VS Code's `editorInsets` API, which is still a proposal.
+Editors only let an extension use a proposal when it is named in their `argv.json`. Add this entry
+to `~/.vscode/argv.json` for VS Code and to `~/.cursor/argv.json` for Cursor (in VS Code the
+command palette entry is *Preferences: Configure Runtime Arguments*):
+
+```jsonc
+"enable-proposed-api": ["local.claude-pending-edits"]
+```
+
+Then quit the editor completely and start it again; `argv.json` is read at startup. Without this
+step the extension still works, with a plainer view: green rows, a red marker with a hover for
+removed lines, and the Discard/Keep bar as a CodeLens above each block.
+
+**3. Install the Claude Code plugin**
+
+```sh
+claude plugin marketplace add /path/to/clause      # the folder you cloned
+claude plugin install pending-edits@claude-pending-edits --scope user
+```
+
+Start a new Claude Code session, or run `/reload-plugins` in a running one. Claude Code runs a copy
+of `claude-plugin/` (under `~/.claude/plugins/cache/`), so after the plugin's code changes, for
+example after a `git pull`, uninstall it and install it again.
+
+**4. Optional: track shell commands**
+
+Edits made by commands such as `sed -i` or a code generator are tracked only when Claude Code
+reports them to hooks, which it does after this setting is on in `~/.claude/settings.json`:
+
+```json
+"bashEditDiffEnabled": true
+```
+
+It also needs the changed file to be inside a git repository. See the limits below.
+
+## Using it
+
+Put Claude Code in **accept edits** mode (Shift+Tab) to get the Cursor flow: it edits, you review
+later. In the default mode you still approve each edit as before, and approved edits stay pending
+too.
+
+| Action | Default key |
+|---|---|
+| Keep / Discard the block at the cursor | `Ctrl+Y` / `Ctrl+N` |
+| Keep only the selected lines of a block | `Ctrl+Y`, with lines selected inside the block |
+| Next / previous block in this file | `Alt+J` / `Alt+K`, or `Ctrl+Alt+C` then `N` / `P` |
+| Next / previous file to review | `Alt+L` / `Alt+H`, or `Ctrl+Alt+C` then `F` / `Shift+F` |
+| Keep / Discard the whole file | `Ctrl+Alt+C` then `Shift+K` / `Shift+D` |
+| Keep All / Discard All | the Clause view's toolbar, or the command palette |
+| Open Diff: "before Claude" against "now" | the editor title bar |
+
+The keys work while an editor has focus. `Ctrl+Y` and `Ctrl+N` are active only while the cursor is
+inside a block, and there they take over Redo and New File. Every command is in the command
+palette under "Claude Pending: …", and every key can be rebound in Keyboard Shortcuts (the command
+ids are `claudePending.keepBlock`, `claudePending.discardBlock` and so on).
+
+Rules worth knowing:
+
+- If Claude edits code that is already in a block, the new edit merges into that block: the block
+  always shows the original against the latest.
+- Your own edits to a file that has pending blocks are blocks too, with the same Keep and Discard:
+  typing next to a block grows it, typing anywhere else makes a new one, and Discard reverts it like
+  any other block. A block does not know who wrote it, so Discard on a block that mixes Claude's
+  lines with yours reverts both. A file with no pending block is not tracked, so editing it shows
+  nothing.
+- Discard goes through the editor, so `Ctrl+Z` brings the block back. **Keep cannot be undone**: it
+  moves the baseline in the store. After a Discard the file is saved, unless it already had unsaved
+  edits of yours.
+- A file Claude created is one block. Discarding it moves the file to the trash; it never deletes it
+  outright, and on a system without a trash it refuses.
+- A pending file that is deleted later shows as deleted. Discard recreates it from the baseline.
+- Notebooks, binary and non-UTF-8 files, and files over 2 MB get file-level Keep, Discard and Open
+  diff only.
+- Keep All and Discard All act on this window's workspace folders only, because the store is shared
+  by the whole machine. Pending files elsewhere appear under "Other locations", with their own
+  buttons. Discard All asks for confirmation.
+
+## What you'll see
 
 In every editor that shows a file with pending changes:
 
@@ -28,8 +168,8 @@ In every editor that shows a file with pending changes:
   block and **Keep** keeps it.
 - The overview ruler has green and red marks. The editor title bar has Keep file, Discard file, Open
   diff and next/previous block.
-- The **Clause** view in the Source Control sidebar lists files, then blocks, each
-  with Keep and Discard buttons, and Keep All / Discard All at the top.
+- The **Clause** view in the Source Control sidebar lists files, then blocks, each with Keep and
+  Discard buttons, and Keep All / Discard All at the top.
 - The status bar shows `Claude: 3 pending · 2 files` and opens that view.
 - When Claude edits a file, the editor opens it at the changed block on its own, as a preview tab
   and without taking keyboard focus. This is **Follow**; see Settings.
@@ -38,6 +178,13 @@ In every editor that shows a file with pending changes:
   and colours stay where they are: see Finding pending files.
 
 ## How it works
+
+Clause has two parts, and you need both:
+
+- **`claude-plugin/`** is a Claude Code plugin. Its hooks save what each file looked like before
+  Claude's first change to it.
+- **`vscode-extension/`** is a VS Code and Cursor extension. It shows the difference between that
+  saved copy and the file as Keep/Discard blocks.
 
 ```
 Claude Code ──hooks──▶  ~/.claude/pending-edits/  ◀──watches──  VS Code / Cursor extension
@@ -64,111 +211,6 @@ Claude Code ──hooks──▶  ~/.claude/pending-edits/  ◀──watches─�
   does not build on code that is gone. The note does not claim the changes were Claude's, because a
   block may be yours: it asks Claude to re-read the file before editing it again and not to
   re-apply discarded changes unless you ask.
-
-## Requirements
-
-- Claude Code (developed against 2.1.305). Tested with the CLI.
-- Node.js on the `PATH` of the process that starts Claude Code: the hooks run `node`. Tested on
-  Node 24; the plugin uses only Node's built-in modules.
-- VS Code 1.100 or newer, or Cursor. Tested on Linux with VS Code 1.142. In Cursor 3.25.9 the
-  extension activates and creates its views once `argv.json` allows the proposal (step 2 below),
-  but how they look on screen has not been checked: Cursor's login screen blocked a clean test
-  profile.
-- `git`, only for the optional shell-command tracking below.
-
-## Install
-
-Replace `/path/to/clause` with where this repository is.
-
-**1. Build and install the extension**
-
-```sh
-cd /path/to/clause/vscode-extension
-npm install
-npm run build
-npx vsce package --no-dependencies --allow-missing-repository --skip-license
-code --install-extension claude-pending-edits-0.1.0.vsix      # VS Code
-cursor --install-extension claude-pending-edits-0.1.0.vsix    # Cursor
-```
-
-**2. Allow the proposed API (once per editor)**
-
-The red rows and the bar are drawn with VS Code's `editorInsets` API, which is still a proposal.
-Editors only let an extension use a proposal when it is named in their `argv.json`. Add this entry
-to `~/.vscode/argv.json` for VS Code and to `~/.cursor/argv.json` for Cursor (in VS Code the
-command palette entry is *Preferences: Configure Runtime Arguments*):
-
-```jsonc
-"enable-proposed-api": ["local.claude-pending-edits"]
-```
-
-Then quit the editor completely and start it again; `argv.json` is read at startup. Without this
-step the extension still works, with a plainer view: green rows, a red marker with a hover for
-removed lines, and the Discard/Keep bar as a CodeLens above each block.
-
-**3. Install the plugin**
-
-```sh
-claude plugin marketplace add /path/to/clause
-claude plugin install pending-edits@claude-pending-edits --scope user
-```
-
-Start a new Claude Code session, or run `/reload-plugins` in a running one. Claude Code installs a
-copy of `claude-plugin/` (under `~/.claude/plugins/cache/`), so after you change the plugin's code,
-uninstall it and install it again. Do that when you update from a version that had no Follow: its
-plugin copy does not write the `touched` note and still words the discard note as if every
-discarded change were Claude's. With that old copy the extension still shows every block and opens
-the first edit to a file, but repeat edits to a file that is already pending are not followed.
-
-**4. Optional: track shell commands**
-
-Edits made by commands such as `sed -i` or a code generator are tracked only when Claude Code
-reports them to hooks, which it does after this setting is on in `~/.claude/settings.json`:
-
-```json
-"bashEditDiffEnabled": true
-```
-
-It also needs the changed file to be inside a git repository. See the limits below.
-
-## Using it
-
-Put Claude Code in **accept edits** mode (Shift+Tab) to get the Cursor flow: it edits, you review
-later. In the default mode you still approve each edit as before, and approved edits stay pending
-too.
-
-| Command (palette: "Claude Pending: …") | Default key |
-|---|---|
-| Keep Block / Discard Block | `Ctrl+Y` / `Ctrl+N`, while the cursor is inside a block |
-| Keep File / Discard File | `Ctrl+Alt+C` then `Shift+K` / `Shift+D` |
-| Go to Next / Previous Block | `Ctrl+Alt+C` then `N` / `P` |
-| Keep All / Discard All | view toolbar, or the command palette |
-| Open Diff | editor title bar: "before Claude" against "now" |
-
-`Ctrl+Y` and `Ctrl+N` are active only while the cursor is inside a block, and there they take over
-Redo and New File. All keys can be rebound in Keyboard Shortcuts (the command ids are
-`claudePending.keepBlock`, `claudePending.discardBlock` and so on).
-
-Rules worth knowing:
-
-- If Claude edits code that is already in a block, the new edit merges into that block: the block
-  always shows the original against the latest.
-- Your own edits to a file that has pending blocks are blocks too, with the same Keep and Discard:
-  typing next to a block grows it, typing anywhere else makes a new one, and Discard reverts it like
-  any other block. A block does not know who wrote it, so Discard on a block that mixes Claude's
-  lines with yours reverts both. A file with no pending block is not tracked, so editing it shows
-  nothing.
-- Discard goes through the editor, so `Ctrl+Z` brings the block back. **Keep cannot be undone**: it
-  moves the baseline in the store. After a Discard the file is saved, unless it already had unsaved
-  edits of yours.
-- A file Claude created is one block. Discarding it moves the file to the trash; it never deletes it
-  outright, and on a system without a trash it refuses.
-- A pending file that is deleted later shows as deleted. Discard recreates it from the baseline.
-- Notebooks, binary and non-UTF-8 files, and files over 2 MB get file-level Keep, Discard and Open
-  diff only.
-- Keep All and Discard All act on this window's workspace folders only, because the store is shared
-  by the whole machine. Pending files elsewhere appear under "Other locations", with their own
-  buttons. Discard All asks for confirmation.
 
 ## Settings
 
@@ -206,21 +248,29 @@ with pending changes reads `◆, M`. A file with nothing pending keeps git's own
 untracked and yellow when modified. A repository with no commits is green all over, which is why
 a colour alone cannot tell the files apart and the shape does.
 
-Why it works this way. VS Code merges what every decoration provider says about a file into one
-label colour and one badge text. Git uses letters and its own colours, so the marker is a glyph
-that is neither a letter nor a digit, in a colour git does not use. The label colour is taken from
-the newest provider that has one, and git registers its providers after the extension's: one for
-each repository it opens, and all of them again when `git.decorations.enabled` is switched on. So
-the extension registers its own again after git does, and tells the file tree to ask about every
-marked file again, because a new registration starts with nothing cached. Folders get a colour of
-their own for the same reason: a folder without one takes the colour of whichever provider
-answered about a child first, which can be git.
-
 `explorer.decorations.badges` and `explorer.decorations.colors` switch the marks off, git's
 included. The extension has no setting for it. The Source Control view and the status bar remain
 the list of what is pending, and its count.
 
+<details>
+<summary><b>Why it works this way</b></summary>
+
+VS Code merges what every decoration provider says about a file into one label colour and one
+badge text. Git uses letters and its own colours, so the marker is a glyph that is neither a letter
+nor a digit, in a colour git does not use. The label colour is taken from the newest provider that
+has one, and git registers its providers after the extension's: one for each repository it opens,
+and all of them again when `git.decorations.enabled` is switched on. So the extension registers
+its own again after git does, and tells the file tree to ask about every marked file again,
+because a new registration starts with nothing cached. Folders get a colour of their own for the
+same reason: a folder without one takes the colour of whichever provider answered about a child
+first, which can be git.
+
+</details>
+
 ## Limits
+
+<details>
+<summary><b>Known limits</b>: the view, the file tree and Follow, tracking, shell commands</summary>
 
 **View**
 
@@ -285,6 +335,8 @@ trash). Build output that is not git-ignored shows up as noise; Keep All clears 
 in the editor while a Bash command runs may be attributed to Claude. The file-watcher path that
 reports later commands exists on Linux only.
 
+</details>
+
 ## Data and privacy
 
 The store at `~/.claude/pending-edits/` (override with `CLAUDE_PENDING_EDITS_DIR`) holds a copy of
@@ -295,6 +347,17 @@ only you can read (modes 0600 and 0700). Hook failures are written to `errors.lo
 folder, without file contents.
 
 Deleting the folder clears all pending state. Every file keeps whatever it contains on disk.
+
+## Requirements
+
+- Claude Code (developed against 2.1.305). Tested with the CLI.
+- Node.js on the `PATH` of the process that starts Claude Code: the hooks run `node`. Tested on
+  Node 24; the plugin uses only Node's built-in modules.
+- VS Code 1.100 or newer, or Cursor. Tested on Linux with VS Code 1.142. In Cursor 3.25.9 the
+  extension activates and creates its views once `argv.json` allows the proposal (step 2 of the
+  quick start), but how they look on screen has not been checked: Cursor's login screen blocked a
+  clean test profile.
+- `git`, only for the optional shell-command tracking.
 
 ## Uninstall
 
@@ -332,3 +395,7 @@ own workspace, store and `HOME`, so the `argv.json` from step 2 of the install d
 a run allows. `.vscode-test.mjs` points at `/usr/share/code/code`; change that path if VS Code is
 installed elsewhere. Tests must never touch the real `~/.claude/pending-edits`, which is
 why `CLAUDE_PENDING_EDITS_DIR` exists.
+
+## License
+
+[MIT](LICENSE) © 2026 Yashpal Yadav. Use it, fork it, ship it.
