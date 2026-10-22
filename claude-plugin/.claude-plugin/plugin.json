@@ -9,5 +9,6 @@
   "keywords": ["clause", "review", "diff", "keep", "discard", "cursor", "vscode"],
   "icon": "./icon.png",
   "documentationUrl": "https://github.com/Yashpal-0/clause#readme",
+  "privacyPolicyUrl": "https://github.com/Yashpal-0/clause/blob/master/claude-plugin/README.md#what-it-stores-and-what-it-sends",
   "supportUrl": "https://github.com/Yashpal-0/clause/issues"
 }
