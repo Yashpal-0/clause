@@ -42,6 +42,16 @@ export function previousBlock(blocks: readonly Block[], line: number): Block | u
 }
 
 /**
+ * The block to go to once the block that started at `line` has been kept or discarded and the rest have been
+ * worked out again: the first one left at or below that line, which is the one that was after it, and the
+ * first of all when it was the last, as Next Block wraps. Not the cursor's line: a bar can be clicked
+ * while the cursor is elsewhere, and the review goes on from the block that was just settled.
+ */
+export function blockAfterSettled(blocks: readonly Block[], line: number, lineCount: number): Block | undefined {
+  return blocks.find((block) => anchorLine(block, lineCount) >= line) ?? blocks[0];
+}
+
+/**
  * The block to bring into view for an edit that started at `line`: the block
  * that line is in, else the one whose anchor line is nearest, the earlier one
  * on a tie. The text can have moved on since the edit was made, so the line

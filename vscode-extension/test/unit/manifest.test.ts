@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 interface Manifest {
   dependencies?: Record<string, string>;
   contributes: {
-    commands?: { command: string; title: string; icon?: string }[];
+    commands?: { command: string; title: string; category?: string; icon?: string }[];
     menus?: Record<string, { command: string; when?: string; group?: string }[]>;
     keybindings?: { command: string; key: string; when?: string }[];
     configuration?: { properties?: Record<string, { type?: string; default?: unknown; description?: string }> };
@@ -109,6 +109,32 @@ test('Alt+L and Alt+H go to the next and previous file, as in Cursor, and have a
   assert.equal(keyFor('clause.previousFile', 'ctrl+alt+c shift+f')?.when, when);
 });
 
+test('Ctrl+Enter keeps and Ctrl+Shift+Backspace discards the whole file, as in Cursor, and have a chord as well', () => {
+  const when = 'editorTextFocus && clause.fileHasPending';
+  assert.equal(keyFor('clause.keepFile', 'ctrl+enter')?.when, when);
+  assert.equal(keyFor('clause.discardFile', 'ctrl+shift+backspace')?.when, when);
+  assert.equal(keyFor('clause.keepFile', 'ctrl+alt+c shift+k')?.when, when);
+  assert.equal(keyFor('clause.discardFile', 'ctrl+alt+c shift+d')?.when, when);
+});
+
+test('Keep All is in the title of an editor with nothing pending while something elsewhere is, as Cursor offers it in the bar of such a file', () => {
+  const keepAll = inMenu('editor/title', 'clause.keepAll');
+
+  assert.equal(declared('clause.keepAll')?.icon, '$(check-all)');
+  assert.equal(keepAll?.when, 'clause.hasPending && !clause.fileHasPending');
+});
+
+test('the key a tooltip names is the Alt key, not the chord: the editor names the last key declared for a command', () => {
+  const named = (command: string) => (manifest.contributes.keybindings ?? []).filter((item) => item.command === command).at(-1)?.key;
+
+  assert.equal(named('clause.nextBlock'), 'alt+j');
+  assert.equal(named('clause.previousBlock'), 'alt+k');
+  assert.equal(named('clause.nextFile'), 'alt+l');
+  assert.equal(named('clause.previousFile'), 'alt+h');
+  assert.equal(named('clause.keepFile'), 'ctrl+enter');
+  assert.equal(named('clause.discardFile'), 'ctrl+shift+backspace');
+});
+
 test('Ctrl+Y keeps the selected lines when the selection has pending lines, and the block otherwise, never both', () => {
   assert.equal(declared('clause.keepSelection')?.title, 'Keep Selected Lines');
   const selection = keyFor('clause.keepSelection', 'ctrl+y');
@@ -133,4 +159,21 @@ test('the package carries the license of Clause and of every dependency the bund
   const dependencies = Object.keys(manifest.dependencies ?? {});
   assert.ok(dependencies.length > 0, 'the scan found no dependencies; it may be looking in the wrong place');
   for (const name of dependencies) assert.ok(notices.includes(`\`${name}\``), `THIRD_PARTY_NOTICES.md has a section for ${name}`);
+});
+
+test('Review All Changes is a command with a button in the title of the panel, first among them, and an entry in the palette while anything is pending', () => {
+  assert.equal(declared('clause.reviewAll')?.title, 'Review All Changes');
+  assert.equal(declared('clause.reviewAll')?.icon, '$(diff-multiple)');
+  const button = inMenu('view/title', 'clause.reviewAll');
+
+  assert.equal(button?.when, 'view == clause');
+  const order = (item: { group?: string } | undefined) => Number(item?.group?.match(/^navigation@(\d+)$/)?.[1]);
+  for (const item of (manifest.contributes.menus?.['view/title'] ?? []).filter((candidate) => candidate !== button)) {
+    assert.ok(order(button) < order(item), `Review All sits before ${item.command}: look first, then keep or discard`);
+  }
+  assert.equal(inMenu('commandPalette', 'clause.reviewAll')?.when, 'clause.hasPending');
+});
+
+test('every command is listed in the palette under the same category, so that typing it finds them all', () => {
+  for (const command of manifest.contributes.commands ?? []) assert.equal(command.category, 'Clause', command.command);
 });

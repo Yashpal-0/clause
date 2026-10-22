@@ -1,10 +1,17 @@
 import * as vscode from 'vscode';
 import type { Block } from '../hunks.ts';
-import { anchorLine, blockAtLine, fileAfter, nextBlock, partsToKeep, previousBlock, reviewOrder } from '../nav.ts';
+import { anchorLine, blockAfterSettled, blockAtLine, fileAfter, findBlock, nextBlock, partsToKeep, previousBlock, reviewOrder } from '../nav.ts';
 import type { OpResult, PendingFile, PendingModel } from '../pending.ts';
 import { asTarget } from '../targets.ts';
-import { BASELINE_SCHEME, openDiff } from './diff.ts';
+import { BASELINE_SCHEME, openAllDiffs, openDiff } from './diff.ts';
 import { partition, visible } from './scope.ts';
+
+/**
+ * How long a kept or discarded change waits for the model to show the file without it before the cursor stays where
+ * it is. The model learns of the new text a moment after the command is done, and it is usually quick; past this,
+ * something is wrong that a cursor jump would not be worth waiting for.
+ */
+const GO_ON_WAIT_MS = 1000;
 
 /** The questions the commands put to the user; a field is replaceable so that a test need not click a dialog. */
 export interface Prompts {
@@ -61,7 +68,13 @@ export function registerCommands(model: PendingModel, prompts: Prompts): vscode.
   const onBlock = async (arg: unknown, run: (id: string, block: Block) => Promise<OpResult>) => {
     const found = blockFrom(arg);
     if (found === undefined) return tell('Put the cursor in a pending change first, or keep or discard the whole file.');
-    return report(await run(found.id, found.block));
+
+    // Only for the file being looked at: a click in the panel on another file leaves the editor where it is.
+    const editor = activeEditor();
+    const lookingAt = editor !== undefined && model.fileForUri(editor.document.uri)?.id === found.id;
+    const result = report(await run(found.id, found.block));
+    if (result.ok && lookingAt) await goOn(editor, found);
+    return result;
   };
 
   const onFile = async (arg: unknown, run: (file: PendingFile) => Promise<OpResult>) => {
@@ -76,17 +89,50 @@ export function registerCommands(model: PendingModel, prompts: Prompts): vscode.
     return asTarget(arg)?.kind === 'group' ? outside : here;
   };
 
+  const moveTo = (editor: vscode.TextEditor, line: number) => {
+    const position = new vscode.Position(Math.min(line, editor.document.lineCount - 1), 0);
+    editor.selection = new vscode.Selection(position, position);
+    editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  };
+
   const jump = (pick: typeof nextBlock) => {
     const editor = activeEditor();
     const file = activeFile();
     if (editor === undefined || file === undefined || file.state.cur === null) return;
     const block = pick(file.state.blocks, editor.selection.active.line);
-    if (block === undefined) return;
+    if (block !== undefined) moveTo(editor, anchorLine(block, file.state.cur.lines.length));
+  };
 
-    const line = Math.min(anchorLine(block, file.state.cur.lines.length), editor.document.lineCount - 1);
-    const position = new vscode.Position(line, 0);
-    editor.selection = new vscode.Selection(position, position);
-    editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  /** Resolves true once `done()` holds, checked now and after every change of the model, or false after `ms`. */
+  const modelShows = (done: () => boolean, ms: number) =>
+    new Promise<boolean>((resolve) => {
+      const finish = (shown: boolean) => {
+        clearTimeout(timer);
+        subscription.dispose();
+        resolve(shown);
+      };
+      const timer = setTimeout(() => finish(false), ms);
+      const subscription = model.onDidChange(() => done() && finish(true));
+      if (done()) finish(true);
+    });
+
+  /**
+   * After a change is kept or discarded, puts the cursor on the next change of the file, as Cursor's review does, so
+   * that Keep and Discard can be pressed again without moving. Waits for the model to show the file without the
+   * settled change, then gives up and leaves the cursor: nothing here is worth holding the user up for.
+   */
+  const goOn = async (editor: vscode.TextEditor, settled: { id: string; block: Block }) => {
+    const gone = () => {
+      const file = model.fileById(settled.id);
+      return file === undefined || findBlock(file.state.blocks, settled.block) === undefined;
+    };
+    if (!(await modelShows(gone, GO_ON_WAIT_MS))) return;
+
+    const file = model.fileById(settled.id);
+    // The user may have moved on to another editor while the model caught up.
+    if (file === undefined || file.state.cur === null || vscode.window.activeTextEditor !== editor) return;
+    const next = blockAfterSettled(file.state.blocks, settled.block.curStart, file.state.cur.lines.length);
+    if (next !== undefined) moveTo(editor, anchorLine(next, file.state.cur.lines.length));
   };
 
   const reveal = async (arg: unknown) => {
@@ -101,7 +147,7 @@ export function registerCommands(model: PendingModel, prompts: Prompts): vscode.
       const position = new vscode.Position(anchorLine(target.block, file.state.cur.lines.length), 0);
       await vscode.window.showTextDocument(file.uri, { preview: false, selection: new vscode.Range(position, position) });
     } else {
-      await vscode.commands.executeCommand('vscode.open', file.uri);
+      await openForReview(file);
     }
   };
 
@@ -182,6 +228,17 @@ export function registerCommands(model: PendingModel, prompts: Prompts): vscode.
       return (await prompts.confirmDiscard(message, detail)) ? report(await model.discardFiles(files.map((file) => file.id))) : undefined;
     }),
     register('openDiff', (arg) => onFile(arg, async (file) => (await openDiff(file), { ok: true }))),
+    register('reviewAll', async () => {
+      const files = reviewOrder(visible(model.files()));
+      if (files.length === 0) return tell('Nothing is pending.');
+
+      try {
+        if ((await openAllDiffs(files)) === 0) return tell('None of the pending files is text that can be compared line by line.');
+      } catch (error) {
+        // `vscode.changes` is an editor command with no entry in the extension API, so an editor update can drop it.
+        void vscode.window.showWarningMessage(`Could not open the combined diff: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }),
     register('nextBlock', () => jump(nextBlock)),
     register('previousBlock', () => jump(previousBlock)),
     register('nextFile', () => stepFile(1)),

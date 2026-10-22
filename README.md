@@ -43,7 +43,8 @@ sign. Hence the name.
 2. The file it just touched opens at the change: Claude's lines in green, the old ones in red,
    right where they were. Your keyboard focus stays in the terminal.
 3. `Ctrl+Y` keeps a block. `Ctrl+N` discards it. Select two lines inside a block and `Ctrl+Y`
-   keeps just those. `Alt+L` takes you to the next file.
+   keeps just those. `Ctrl+Enter` keeps the whole file. `Alt+L`, or the **Review Next File** button
+   in the status bar, takes you to the next file.
 4. Not now? Close everything. Tomorrow, after a reboot, every block you haven't decided on is
    still waiting.
 
@@ -127,13 +128,18 @@ too.
 | Keep / Discard the block at the cursor | `Ctrl+Y` / `Ctrl+N` |
 | Keep only the selected lines of a block | `Ctrl+Y`, with lines selected inside the block |
 | Next / previous block in this file | `Alt+J` / `Alt+K`, or `Ctrl+Alt+C` then `N` / `P` |
-| Next / previous file to review | `Alt+L` / `Alt+H`, or `Ctrl+Alt+C` then `F` / `Shift+F` |
-| Keep / Discard the whole file | `Ctrl+Alt+C` then `Shift+K` / `Shift+D` |
-| Keep All / Discard All | the Clause view's toolbar, or the command palette |
+| Next / previous file to review | `Alt+L` / `Alt+H`, or `Ctrl+Alt+C` then `F` / `Shift+F`; the **Review Next File** button in the status bar and the arrows in the editor title bar |
+| Keep / Discard the whole file | `Ctrl+Enter` / `Ctrl+Shift+Backspace`, or `Ctrl+Alt+C` then `Shift+K` / `Shift+D` |
+| Keep All / Discard All | the Clause view's toolbar, or the command palette; Keep All is also in the title bar of a file with nothing pending |
+| Review every pending file in one diff | **Review All Changes** in the Clause view's toolbar (read-only: keep and discard happen in the editor) |
 | Open Diff: "before Claude" against "now" | the editor title bar |
 
 The keys work while an editor has focus. `Ctrl+Y` and `Ctrl+N` are active only while the cursor is
-inside a block, and there they take over Redo and New File. Every command is in the command
+inside a block, and there they take over Redo and New File. (Cursor acts on the change nearest the
+cursor, from anywhere in the file; Clause waits for the cursor to be in one, so that a stray
+`Ctrl+N` never discards.) `Ctrl+Enter` and `Ctrl+Shift+Backspace` are active only while the open
+file has pending changes, and there `Ctrl+Enter` takes over Insert Line Below. After a Keep or a
+Discard the cursor moves on to the next change in the file. Every command is in the command
 palette under "Clause: …", and every key can be rebound in Keyboard Shortcuts (the command
 ids are `clause.keepBlock`, `clause.discardBlock` and so on).
 
@@ -154,9 +160,12 @@ Rules worth knowing:
 - A pending file that is deleted later shows as deleted. Discard recreates it from the baseline.
 - Notebooks, binary and non-UTF-8 files, and files over 2 MB get file-level Keep, Discard and Open
   diff only.
-- Keep All and Discard All act on this window's workspace folders only, because the store is shared
-  by the whole machine. Pending files elsewhere appear under "Other locations", with their own
-  buttons. Discard All asks for confirmation.
+- The panel lists the files inside this window's workspace folders, and under "Outside this
+  folder" the files elsewhere that a Claude session started in those folders (or inside them)
+  changed. Changes made by sessions started anywhere else stay pending in the store and are not
+  listed, counted or touched here: open that project to see them. Keep All and Discard All act on
+  the files inside the workspace folders; the group has its own buttons. Discard All asks for
+  confirmation.
 
 ## What you'll see
 
@@ -168,11 +177,20 @@ In every editor that shows a file with pending changes:
   rows of a block that only removed lines). It reads `^ 1 of 2 v | Discard Ctrl+N | Keep Ctrl+Y`. The
   counter counts this file's pending blocks, the arrows jump between them, **Discard** discards the
   block and **Keep** keeps it.
-- The overview ruler has green and red marks. The editor title bar has Keep file, Discard file, Open
-  diff and next/previous block.
+- The first line of the file has a bar for the whole file:
+  `‹ File 2 of 5 › | Discard file | Keep file Ctrl+Enter | Review Next File →`. It is a CodeLens, so
+  it scrolls away with the top of the file.
+- The overview ruler has green and red marks. The editor title bar has next/previous block, Keep
+  file, Discard file and Open diff, then the arrows for the previous and next file.
+- Every editor's title bar, a file with nothing pending included, has the two file arrows for as long
+  as anything is pending, and Keep All when the file has nothing pending of its own.
 - The **Clause** view in the Source Control sidebar lists files, then blocks, each with Keep and
-  Discard buttons, and Keep All / Discard All at the top.
-- The status bar shows `Clause: 3 pending · 2 files` and opens that view.
+  Discard buttons, and Keep All / Discard All / Review All Changes at the top. Its heading and the
+  badge read `2 files · 3 changes`, and each file row ends in its lines added and removed
+  (`+7 −3`). Clicking a file opens it as a preview tab with the cursor on its first change.
+- The status bar shows `Clause: 3 pending · 2 files`, which opens that view, and beside it
+  **Review Next File**, a button that opens the next pending file wherever you are, with no editor
+  open as well.
 - When Claude edits a file, the editor opens it at the changed block on its own, as a preview tab
   and without taking keyboard focus. This is **Follow**; see Settings.
 - In the file tree and on editor tabs, a file with pending changes has a violet `◆` after its name
@@ -190,13 +208,15 @@ Clause has two parts, and you need both:
 
 ```
 Claude Code ──hooks──▶  ~/.claude/pending-edits/  ◀──watches──  VS Code / Cursor extension
- (plugin)               entries/<id>/{base,meta.json,touched}    blocks = diff(base, file)
+ (plugin)               entries/<id>/{base,meta.json,touched,sessions}   blocks = diff(base, file)
 ```
 
 - Before Claude changes a file for the first time, the plugin stores the file's exact bytes (the
   *baseline*), or notes that the file did not exist. After every successful edit it also writes a
   small `touched` note: when, which tool call, and the line where the edit starts. That note is how
-  the extension knows which file to open and where. It holds no path and no file content.
+  the extension knows which file to open and where. It holds no path and no file content. A
+  `sessions` note lists the folders the Claude sessions that changed the file were started in; it
+  is how the panel tells this window's sessions from other projects'.
 - The extension computes the pending blocks as the difference between the baseline and the file as
   you see it: the editor's text when the file is open (unsaved edits count), otherwise the file on
   disk. **Keep** moves the baseline forward to include the block. **Discard** reverts the file for
@@ -279,6 +299,17 @@ first, which can be git.
 - The bar is a row of its own below the block, so the bar of a long block is at its end, off screen
   until you scroll there. `Ctrl+Y` and `Ctrl+N` inside the block, the title-bar buttons and the
   Clause view work from anywhere.
+- The file bar is a CodeLens on the first line of the file, so it scrolls away with it and needs
+  `editor.codeLens` on (the default). What stays in view is the arrows in the editor title bar and
+  the **Review Next File** button in the status bar. A narrow editor collapses title-bar buttons
+  into the `…` menu, the arrows last. Where a block starts on the first line and its bar is a
+  CodeLens too (the fallback below), the two share one row.
+- **Review All Changes** opens VS Code's multi-file diff through `vscode.changes`, an editor command
+  with no typed wrapper in the extension API. An editor update can change it; the command then
+  reports the error and nothing else is affected. The diff is read-only.
+- Clause does not register a source control quick-diff provider, because VS Code only offers that
+  through a second, empty entry in the Source Control view. Inside a git folder, git's own gutter
+  bars and peek (against HEAD, not against the state before Claude) cover Claude's edits too.
 - An inset is as wide as the editor, so the editor's scrollbar is drawn over its right end. The bar
   stops 18px short of that end: the default 14px scrollbar plus the 4px gap Cursor leaves. With the
   default minimap on, it also stops short of the minimap. A larger
@@ -344,7 +375,8 @@ reports later commands exists on Linux only.
 The store at `~/.claude/pending-edits/` (override with `CLAUDE_PENDING_EDITS_DIR`) holds a copy of
 each file Claude changed, as it was before, until you Keep or Discard. That includes files such as
 `.env` if Claude edits them. Next to each copy is a `touched` note with a time, a tool call id and a
-line number, and no path or content. Everything stays on your machine, in files and directories
+line number, and no path or content, and a `sessions` note with the folders Claude sessions were
+started in (paths, never file contents). Everything stays on your machine, in files and directories
 only you can read (modes 0600 and 0700). Hook failures are written to `errors.log` in the same
 folder, without file contents.
 

@@ -50,3 +50,18 @@ export async function openDiff(file: PendingFile): Promise<void> {
   const after = file.state.situation === 'deleted' ? baselineUri(file, true) : file.uri;
   await vscode.commands.executeCommand('vscode.diff', before, after, `${basename(file.path)} (before Claude ↔ now)`, { preview: false });
 }
+
+/**
+ * Opens one scrolling diff of `files`, in the order given, each with the file as it was before Claude on the left
+ * and as it is now on the right. A file Claude created has an empty left side and one it deleted has no right side.
+ * Files that cannot be compared line by line (binary, too large) are left out; resolves to how many it shows, and
+ * opens nothing when that is none. It is for reading: the Keep and Discard bars are not drawn inside it.
+ */
+export async function openAllDiffs(files: readonly PendingFile[]): Promise<number> {
+  // [the file the entry stands for, its left side, its right side], as `vscode.changes` takes them.
+  const changes = files
+    .filter((file) => file.state.granularity === 'blocks')
+    .map((file) => [file.uri, baselineUri(file, file.state.situation === 'created'), file.state.situation === 'deleted' ? undefined : file.uri]);
+  if (changes.length > 0) await vscode.commands.executeCommand('vscode.changes', 'Pending changes (before Claude ↔ now)', changes);
+  return changes.length;
+}
