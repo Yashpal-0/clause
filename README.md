@@ -10,8 +10,10 @@ once. Close Claude, close the editor, reboot. Your review is right where you lef
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![VS Code 1.100+ and Cursor](https://img.shields.io/badge/VS%20Code%201.100%2B%20%7C%20Cursor-extension-007ACC?logo=visualstudiocode&logoColor=white)](#quick-start)
-[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D97757?logo=claude&logoColor=white)](#quick-start)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8957E5.svg)](#quick-start)
 [![Plugin dependencies: 0](https://img.shields.io/badge/plugin%20dependencies-0-brightgreen.svg)](claude-plugin/)
+
+<sub>An independent open-source project. Not affiliated with or endorsed by Anthropic.</sub>
 
 </div>
 
@@ -403,3 +405,7 @@ why `CLAUDE_PENDING_EDITS_DIR` exists.
 The extension bundles [jsdiff](https://github.com/kpdecker/jsdiff) (BSD-3-Clause). Its notice is in
 [`vscode-extension/THIRD_PARTY_NOTICES.md`](vscode-extension/THIRD_PARTY_NOTICES.md) and ships
 inside the `.vsix`.
+
+Clause is an independent project. It is not affiliated with, endorsed by or sponsored by
+Anthropic. Claude and Claude Code are trademarks of Anthropic, PBC. They, and the other product
+names in this README, are used only to say what Clause works with.
