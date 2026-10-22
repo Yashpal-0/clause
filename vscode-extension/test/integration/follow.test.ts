@@ -25,7 +25,7 @@ const SETTLE_MS = 150;
 const TYPING_IDLE_MS = 1500;
 
 const idOf = (path: string) => store().idFor(path);
-const setting = () => vscode.workspace.getConfiguration('claudePending');
+const setting = () => vscode.workspace.getConfiguration('clause');
 
 describe('opening the file Claude has just edited', () => {
   let api: ExtensionApi;

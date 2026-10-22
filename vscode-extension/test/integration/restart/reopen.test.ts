@@ -23,7 +23,7 @@ describe('after the editor is opened again with changes still pending', () => {
       file.state.blocks.map((block) => block.kind),
       ['changed', 'changed', 'added'],
     );
-    await waitFor('the count', () => api.summary.text === '$(diff) Claude: 3 pending · 1 file');
+    await waitFor('the count', () => api.summary.text === '$(diff) Clause: 3 pending · 1 file');
   });
 
   it('still counts the typing as a block: the baseline is the one from before Claude\'s first edit', async () => {
@@ -50,7 +50,7 @@ describe('after the editor is opened again with changes still pending', () => {
     const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', editor.document.uri);
 
     assert.deepEqual(
-      lenses.filter((lens) => lens.command?.command === 'claudePending.keepBlock').map((lens) => lens.range.start.line),
+      lenses.filter((lens) => lens.command?.command === 'clause.keepBlock').map((lens) => lens.range.start.line),
       [1, 4, 7],
     );
     await waitFor('the tints', () => api.decorations.appliedTo(editor)?.added.length === 3);
@@ -67,7 +67,7 @@ describe('after the editor is opened again with changes still pending', () => {
   it('lets the user discard a block, and leaves the other two alone', async () => {
     const file = await onlyPendingFile(api);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(file, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(file, 0)));
 
     assert.equal(read(restartFile()), 'one\ntwo\nthree\nfour\nmy five\nsix\nseven\neight\n');
     assert.equal(storedBaseline(restartFile()), BEFORE);

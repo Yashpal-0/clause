@@ -1,5 +1,5 @@
 {
-  "name": "claude-pending-edits",
+  "name": "clause",
   "displayName": "Clause",
   "description": "Keep or Discard every edit Claude Code makes, per block, per file or all at once, across prompts and restarts.",
   "version": "0.1.0",
@@ -40,366 +40,366 @@
   "contributes": {
     "commands": [
       {
-        "command": "claudePending.keepBlock",
+        "command": "clause.keepBlock",
         "title": "Keep Block",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(check)"
       },
       {
-        "command": "claudePending.discardBlock",
+        "command": "clause.discardBlock",
         "title": "Discard Block",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(discard)"
       },
       {
-        "command": "claudePending.keepSelection",
+        "command": "clause.keepSelection",
         "title": "Keep Selected Lines"
       },
       {
-        "command": "claudePending.keepFile",
+        "command": "clause.keepFile",
         "title": "Keep File",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(check-all)"
       },
       {
-        "command": "claudePending.discardFile",
+        "command": "clause.discardFile",
         "title": "Discard File",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(discard)"
       },
       {
-        "command": "claudePending.keepAll",
+        "command": "clause.keepAll",
         "title": "Keep All",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(check-all)"
       },
       {
-        "command": "claudePending.discardAll",
+        "command": "clause.discardAll",
         "title": "Discard All",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(trash)"
       },
       {
-        "command": "claudePending.openDiff",
+        "command": "clause.openDiff",
         "title": "Open Diff",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(diff)"
       },
       {
-        "command": "claudePending.nextBlock",
+        "command": "clause.nextBlock",
         "title": "Go to Next Block",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(arrow-down)"
       },
       {
-        "command": "claudePending.previousBlock",
+        "command": "clause.previousBlock",
         "title": "Go to Previous Block",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(arrow-up)"
       },
       {
-        "command": "claudePending.nextFile",
+        "command": "clause.nextFile",
         "title": "Review Next File",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(arrow-right)"
       },
       {
-        "command": "claudePending.previousFile",
+        "command": "clause.previousFile",
         "title": "Review Previous File",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(arrow-left)"
       },
       {
-        "command": "claudePending.reveal",
+        "command": "clause.reveal",
         "title": "Show",
-        "category": "Claude Pending"
+        "category": "Clause"
       },
       {
-        "command": "claudePending.refresh",
+        "command": "clause.refresh",
         "title": "Refresh",
-        "category": "Claude Pending",
+        "category": "Clause",
         "icon": "$(refresh)"
       }
     ],
     "views": {
       "scm": [
         {
-          "id": "claudePending",
+          "id": "clause",
           "name": "Clause",
-          "when": "claudePending.hasPending"
+          "when": "clause.hasPending"
         }
       ]
     },
     "menus": {
       "view/title": [
         {
-          "command": "claudePending.keepAll",
-          "when": "view == claudePending",
+          "command": "clause.keepAll",
+          "when": "view == clause",
           "group": "navigation@1"
         },
         {
-          "command": "claudePending.discardAll",
-          "when": "view == claudePending",
+          "command": "clause.discardAll",
+          "when": "view == clause",
           "group": "navigation@2"
         },
         {
-          "command": "claudePending.refresh",
-          "when": "view == claudePending",
+          "command": "clause.refresh",
+          "when": "view == clause",
           "group": "navigation@3"
         }
       ],
       "view/item/context": [
         {
-          "command": "claudePending.keepBlock",
-          "when": "view == claudePending && viewItem == block",
+          "command": "clause.keepBlock",
+          "when": "view == clause && viewItem == block",
           "group": "inline@1"
         },
         {
-          "command": "claudePending.discardBlock",
-          "when": "view == claudePending && viewItem == block",
+          "command": "clause.discardBlock",
+          "when": "view == clause && viewItem == block",
           "group": "inline@2"
         },
         {
-          "command": "claudePending.keepFile",
-          "when": "view == claudePending && viewItem == file",
+          "command": "clause.keepFile",
+          "when": "view == clause && viewItem == file",
           "group": "inline@1"
         },
         {
-          "command": "claudePending.discardFile",
-          "when": "view == claudePending && viewItem == file",
+          "command": "clause.discardFile",
+          "when": "view == clause && viewItem == file",
           "group": "inline@2"
         },
         {
-          "command": "claudePending.openDiff",
-          "when": "view == claudePending && viewItem == file",
+          "command": "clause.openDiff",
+          "when": "view == clause && viewItem == file",
           "group": "inline@3"
         },
         {
-          "command": "claudePending.keepAll",
-          "when": "view == claudePending && viewItem == group",
+          "command": "clause.keepAll",
+          "when": "view == clause && viewItem == group",
           "group": "inline@1"
         },
         {
-          "command": "claudePending.discardAll",
-          "when": "view == claudePending && viewItem == group",
+          "command": "clause.discardAll",
+          "when": "view == clause && viewItem == group",
           "group": "inline@2"
         },
         {
-          "command": "claudePending.keepBlock",
-          "when": "view == claudePending && viewItem == block",
+          "command": "clause.keepBlock",
+          "when": "view == clause && viewItem == block",
           "group": "1_review@1"
         },
         {
-          "command": "claudePending.discardBlock",
-          "when": "view == claudePending && viewItem == block",
+          "command": "clause.discardBlock",
+          "when": "view == clause && viewItem == block",
           "group": "1_review@2"
         },
         {
-          "command": "claudePending.keepFile",
-          "when": "view == claudePending && viewItem == file",
+          "command": "clause.keepFile",
+          "when": "view == clause && viewItem == file",
           "group": "1_review@1"
         },
         {
-          "command": "claudePending.discardFile",
-          "when": "view == claudePending && viewItem == file",
+          "command": "clause.discardFile",
+          "when": "view == clause && viewItem == file",
           "group": "1_review@2"
         },
         {
-          "command": "claudePending.openDiff",
-          "when": "view == claudePending && viewItem == file",
+          "command": "clause.openDiff",
+          "when": "view == clause && viewItem == file",
           "group": "1_review@3"
         },
         {
-          "command": "claudePending.keepAll",
-          "when": "view == claudePending && viewItem == group",
+          "command": "clause.keepAll",
+          "when": "view == clause && viewItem == group",
           "group": "1_review@1"
         },
         {
-          "command": "claudePending.discardAll",
-          "when": "view == claudePending && viewItem == group",
+          "command": "clause.discardAll",
+          "when": "view == clause && viewItem == group",
           "group": "1_review@2"
         }
       ],
       "editor/title": [
         {
-          "command": "claudePending.previousBlock",
-          "when": "claudePending.fileHasPending",
+          "command": "clause.previousBlock",
+          "when": "clause.fileHasPending",
           "group": "navigation@1"
         },
         {
-          "command": "claudePending.nextBlock",
-          "when": "claudePending.fileHasPending",
+          "command": "clause.nextBlock",
+          "when": "clause.fileHasPending",
           "group": "navigation@2"
         },
         {
-          "command": "claudePending.keepFile",
-          "when": "claudePending.fileHasPending",
+          "command": "clause.keepFile",
+          "when": "clause.fileHasPending",
           "group": "navigation@3"
         },
         {
-          "command": "claudePending.discardFile",
-          "when": "claudePending.fileHasPending",
+          "command": "clause.discardFile",
+          "when": "clause.fileHasPending",
           "group": "navigation@4"
         },
         {
-          "command": "claudePending.openDiff",
-          "when": "claudePending.fileHasPending",
+          "command": "clause.openDiff",
+          "when": "clause.fileHasPending",
           "group": "navigation@5"
         },
         {
-          "command": "claudePending.previousFile",
-          "when": "claudePending.hasPending",
+          "command": "clause.previousFile",
+          "when": "clause.hasPending",
           "group": "navigation@6"
         },
         {
-          "command": "claudePending.nextFile",
-          "when": "claudePending.hasPending",
+          "command": "clause.nextFile",
+          "when": "clause.hasPending",
           "group": "navigation@7"
         }
       ],
       "editor/context": [
         {
-          "command": "claudePending.keepBlock",
-          "when": "claudePending.inBlock",
-          "group": "claudePending@1"
+          "command": "clause.keepBlock",
+          "when": "clause.inBlock",
+          "group": "clause@1"
         },
         {
-          "command": "claudePending.discardBlock",
-          "when": "claudePending.inBlock",
-          "group": "claudePending@2"
+          "command": "clause.discardBlock",
+          "when": "clause.inBlock",
+          "group": "clause@2"
         },
         {
-          "command": "claudePending.keepSelection",
-          "when": "claudePending.selectionInPending",
-          "group": "claudePending@3"
+          "command": "clause.keepSelection",
+          "when": "clause.selectionInPending",
+          "group": "clause@3"
         }
       ],
       "commandPalette": [
         {
-          "command": "claudePending.reveal",
+          "command": "clause.reveal",
           "when": "false"
         },
         {
-          "command": "claudePending.keepBlock",
-          "when": "claudePending.inBlock"
+          "command": "clause.keepBlock",
+          "when": "clause.inBlock"
         },
         {
-          "command": "claudePending.discardBlock",
-          "when": "claudePending.inBlock"
+          "command": "clause.discardBlock",
+          "when": "clause.inBlock"
         },
         {
-          "command": "claudePending.keepSelection",
-          "when": "claudePending.selectionInPending"
+          "command": "clause.keepSelection",
+          "when": "clause.selectionInPending"
         },
         {
-          "command": "claudePending.keepFile",
-          "when": "claudePending.fileHasPending"
+          "command": "clause.keepFile",
+          "when": "clause.fileHasPending"
         },
         {
-          "command": "claudePending.discardFile",
-          "when": "claudePending.fileHasPending"
+          "command": "clause.discardFile",
+          "when": "clause.fileHasPending"
         },
         {
-          "command": "claudePending.openDiff",
-          "when": "claudePending.fileHasPending"
+          "command": "clause.openDiff",
+          "when": "clause.fileHasPending"
         },
         {
-          "command": "claudePending.nextBlock",
-          "when": "claudePending.fileHasPending"
+          "command": "clause.nextBlock",
+          "when": "clause.fileHasPending"
         },
         {
-          "command": "claudePending.previousBlock",
-          "when": "claudePending.fileHasPending"
+          "command": "clause.previousBlock",
+          "when": "clause.fileHasPending"
         },
         {
-          "command": "claudePending.keepAll",
-          "when": "claudePending.hasPending"
+          "command": "clause.keepAll",
+          "when": "clause.hasPending"
         },
         {
-          "command": "claudePending.discardAll",
-          "when": "claudePending.hasPending"
+          "command": "clause.discardAll",
+          "when": "clause.hasPending"
         },
         {
-          "command": "claudePending.nextFile",
-          "when": "claudePending.hasPending"
+          "command": "clause.nextFile",
+          "when": "clause.hasPending"
         },
         {
-          "command": "claudePending.previousFile",
-          "when": "claudePending.hasPending"
+          "command": "clause.previousFile",
+          "when": "clause.hasPending"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "claudePending.keepBlock",
+        "command": "clause.keepBlock",
         "key": "ctrl+y",
-        "when": "editorTextFocus && claudePending.inBlock && !claudePending.selectionInPending"
+        "when": "editorTextFocus && clause.inBlock && !clause.selectionInPending"
       },
       {
-        "command": "claudePending.keepSelection",
+        "command": "clause.keepSelection",
         "key": "ctrl+y",
-        "when": "editorTextFocus && claudePending.selectionInPending"
+        "when": "editorTextFocus && clause.selectionInPending"
       },
       {
-        "command": "claudePending.discardBlock",
+        "command": "clause.discardBlock",
         "key": "ctrl+n",
-        "when": "editorTextFocus && claudePending.inBlock"
+        "when": "editorTextFocus && clause.inBlock"
       },
       {
-        "command": "claudePending.keepFile",
+        "command": "clause.keepFile",
         "key": "ctrl+alt+c shift+k",
-        "when": "editorTextFocus && claudePending.fileHasPending"
+        "when": "editorTextFocus && clause.fileHasPending"
       },
       {
-        "command": "claudePending.discardFile",
+        "command": "clause.discardFile",
         "key": "ctrl+alt+c shift+d",
-        "when": "editorTextFocus && claudePending.fileHasPending"
+        "when": "editorTextFocus && clause.fileHasPending"
       },
       {
-        "command": "claudePending.nextBlock",
+        "command": "clause.nextBlock",
         "key": "ctrl+alt+c n",
-        "when": "editorTextFocus && claudePending.fileHasPending"
+        "when": "editorTextFocus && clause.fileHasPending"
       },
       {
-        "command": "claudePending.previousBlock",
+        "command": "clause.previousBlock",
         "key": "ctrl+alt+c p",
-        "when": "editorTextFocus && claudePending.fileHasPending"
+        "when": "editorTextFocus && clause.fileHasPending"
       },
       {
-        "command": "claudePending.nextBlock",
+        "command": "clause.nextBlock",
         "key": "alt+j",
-        "when": "editorTextFocus && claudePending.fileHasPending"
+        "when": "editorTextFocus && clause.fileHasPending"
       },
       {
-        "command": "claudePending.previousBlock",
+        "command": "clause.previousBlock",
         "key": "alt+k",
-        "when": "editorTextFocus && claudePending.fileHasPending"
+        "when": "editorTextFocus && clause.fileHasPending"
       },
       {
-        "command": "claudePending.nextFile",
+        "command": "clause.nextFile",
         "key": "alt+l",
-        "when": "editorTextFocus && claudePending.hasPending"
+        "when": "editorTextFocus && clause.hasPending"
       },
       {
-        "command": "claudePending.previousFile",
+        "command": "clause.previousFile",
         "key": "alt+h",
-        "when": "editorTextFocus && claudePending.hasPending"
+        "when": "editorTextFocus && clause.hasPending"
       },
       {
-        "command": "claudePending.nextFile",
+        "command": "clause.nextFile",
         "key": "ctrl+alt+c f",
-        "when": "editorTextFocus && claudePending.hasPending"
+        "when": "editorTextFocus && clause.hasPending"
       },
       {
-        "command": "claudePending.previousFile",
+        "command": "clause.previousFile",
         "key": "ctrl+alt+c shift+f",
-        "when": "editorTextFocus && claudePending.hasPending"
+        "when": "editorTextFocus && clause.hasPending"
       }
     ],
     "configuration": {
       "title": "Clause",
       "properties": {
-        "claudePending.followEdits": {
+        "clause.followEdits": {
           "type": "boolean",
           "default": true,
           "description": "Open the file Claude has just edited, at the changed block, as a preview tab. Keyboard focus stays where it is, and nothing opens while you are typing or for files outside this window's folders."
@@ -408,7 +408,7 @@
     },
     "colors": [
       {
-        "id": "claudePending.addedBackground",
+        "id": "clause.addedBackground",
         "description": "Background of lines Claude added or rewrote that have not been kept or discarded.",
         "defaults": {
           "dark": "#388d5b40",
@@ -418,7 +418,7 @@
         }
       },
       {
-        "id": "claudePending.addedRuler",
+        "id": "clause.addedRuler",
         "description": "Overview ruler mark for lines Claude added or rewrote.",
         "defaults": {
           "dark": "#2ea043",
@@ -428,7 +428,7 @@
         }
       },
       {
-        "id": "claudePending.removedBackground",
+        "id": "clause.removedBackground",
         "description": "Background of the rows that show lines Claude removed.",
         "defaults": {
           "dark": "#98044040",
@@ -438,7 +438,7 @@
         }
       },
       {
-        "id": "claudePending.keepBackground",
+        "id": "clause.keepBackground",
         "description": "Background of the Keep button on the bar of a block Claude changed.",
         "defaults": {
           "dark": "#388d5b",
@@ -448,7 +448,7 @@
         }
       },
       {
-        "id": "claudePending.keepForeground",
+        "id": "clause.keepForeground",
         "description": "Text of the Keep button on the bar of a block Claude changed.",
         "defaults": {
           "dark": "#101010",
@@ -458,7 +458,7 @@
         }
       },
       {
-        "id": "claudePending.removedBorder",
+        "id": "clause.removedBorder",
         "description": "Rule drawn where Claude removed lines, and its overview ruler mark.",
         "defaults": {
           "dark": "#f85149",
@@ -468,7 +468,7 @@
         }
       },
       {
-        "id": "claudePending.removedForeground",
+        "id": "clause.removedForeground",
         "description": "Text of the note shown where Claude removed lines.",
         "defaults": {
           "dark": "#f85149",
@@ -478,7 +478,7 @@
         }
       },
       {
-        "id": "claudePending.explorerForeground",
+        "id": "clause.explorerForeground",
         "description": "Colour of the mark on files, in the file tree and on their tabs, that have changes waiting for Keep or Discard.",
         "defaults": {
           "dark": "charts.purple",

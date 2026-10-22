@@ -20,15 +20,15 @@ export class Decorations implements vscode.Disposable {
 
   readonly #added = vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
-    backgroundColor: new vscode.ThemeColor('claudePending.addedBackground'),
-    overviewRulerColor: new vscode.ThemeColor('claudePending.addedRuler'),
+    backgroundColor: new vscode.ThemeColor('clause.addedBackground'),
+    overviewRulerColor: new vscode.ThemeColor('clause.addedRuler'),
     overviewRulerLane: vscode.OverviewRulerLane.Left,
   });
   readonly #removedBelow = removedType('none none solid none');
   readonly #removedAbove = removedType('solid none none none');
   readonly #removedRuler = vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
-    overviewRulerColor: new vscode.ThemeColor('claudePending.removedBorder'),
+    overviewRulerColor: new vscode.ThemeColor('clause.removedBorder'),
     overviewRulerLane: vscode.OverviewRulerLane.Left,
   });
 
@@ -87,7 +87,7 @@ export class Decorations implements vscode.Disposable {
           renderOptions: {
             after: {
               contentText: `${gap.count} ${gap.count === 1 ? 'line' : 'lines'} removed`,
-              color: new vscode.ThemeColor('claudePending.removedForeground'),
+              color: new vscode.ThemeColor('clause.removedForeground'),
               fontStyle: 'italic',
               margin: '0 0 0 2em',
             },
@@ -107,8 +107,8 @@ function removedType(borderStyle: string): vscode.TextEditorDecorationType {
     isWholeLine: true,
     borderStyle,
     borderWidth: '1px',
-    borderColor: new vscode.ThemeColor('claudePending.removedBorder'),
-    overviewRulerColor: new vscode.ThemeColor('claudePending.removedBorder'),
+    borderColor: new vscode.ThemeColor('clause.removedBorder'),
+    overviewRulerColor: new vscode.ThemeColor('clause.removedBorder'),
     overviewRulerLane: vscode.OverviewRulerLane.Left,
   });
 }

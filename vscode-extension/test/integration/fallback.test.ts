@@ -36,10 +36,10 @@ describe('the CodeLens view, where the editor has not allowed the editorInsets p
     const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', editor.document.uri);
 
     const titles = (command: string) => lenses.filter((lens) => lens.command?.command === command).map((lens) => lens.command?.title);
-    assert.deepEqual(titles('claudePending.keepBlock'), ['$(check) Keep Ctrl+Y', '$(check) Keep Ctrl+Y']);
-    assert.deepEqual(titles('claudePending.discardBlock'), ['$(discard) Discard Ctrl+N', '$(discard) Discard Ctrl+N']);
-    assert.equal(titles('claudePending.reveal').length, 4, 'an arrow each way, for each of the two blocks');
-    assert.equal(titles('claudePending.openDiff').length, 2);
+    assert.deepEqual(titles('clause.keepBlock'), ['$(check) Keep Ctrl+Y', '$(check) Keep Ctrl+Y']);
+    assert.deepEqual(titles('clause.discardBlock'), ['$(discard) Discard Ctrl+N', '$(discard) Discard Ctrl+N']);
+    assert.equal(titles('clause.reveal').length, 4, 'an arrow each way, for each of the two blocks');
+    assert.equal(titles('clause.openDiff').length, 2);
   });
 
   it('still marks the place where lines were removed', async () => {

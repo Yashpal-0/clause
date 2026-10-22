@@ -30,7 +30,7 @@ describe('reviewing a file that is open in an editor', () => {
     const file = await onlyPendingFile(api);
     const editor = await open(path);
 
-    const result = await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(file, 1));
+    const result = await vscode.commands.executeCommand('clause.discardBlock', blockTarget(file, 1));
 
     assert.deepEqual(result, { ok: true });
     assert.equal(editor.document.getText(), 'one\nTWO\nthree\nfour\n');
@@ -54,7 +54,7 @@ describe('reviewing a file that is open in an editor', () => {
     await typeAt(editor, 2);
     assert.equal(editor.document.isDirty, true);
 
-    const result = await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(api.model.files()[0]!, 1));
+    const result = await vscode.commands.executeCommand('clause.discardBlock', blockTarget(api.model.files()[0]!, 1));
 
     assert.deepEqual(result, { ok: true });
     assert.equal(editor.document.getText(), 'one\nTWO\nmy three\nfour\n');
@@ -70,7 +70,7 @@ describe('reviewing a file that is open in an editor', () => {
     await typeAt(editor, 2);
     assert.equal(editor.document.isDirty, true);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(file)));
+    assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(file)));
 
     assert.equal(editor.document.getText(), BEFORE, 'typing differs from the baseline like anything else, so it goes with the rest');
     assert.equal(editor.document.isDirty, true);
@@ -91,7 +91,7 @@ describe('reviewing a file that is open in an editor', () => {
     await typeAt(editor, 2);
     await waitFor('the typing to join the block above it', () => api.model.files()[0]?.state.blocks[0]?.curEnd === 3);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(api.model.files()[0]!, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(api.model.files()[0]!, 0)));
 
     assert.equal(editor.document.getText(), 'one\ntwo\nthree\nfour\nfive\n');
     assert.equal(editor.document.isDirty, true, 'unsaved work stays unsaved');

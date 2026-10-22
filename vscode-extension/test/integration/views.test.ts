@@ -130,7 +130,7 @@ describe('the Clause view', () => {
     let refreshes = 0;
     const subscription = api.tree.onDidChangeTreeData(() => refreshes++);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(file)));
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(file)));
 
     await waitFor('the view to be told', () => refreshes > 0);
     subscription.dispose();
@@ -150,12 +150,12 @@ describe('the status bar', () => {
     const first = seedEdited('a.txt', BEFORE, AFTER);
     const second = seedEdited('b.txt', 'x\ny\n', 'x\nY\n');
 
-    await waitFor('both files to be counted', () => api.summary.text === '$(diff) Claude: 3 pending · 2 files');
+    await waitFor('both files to be counted', () => api.summary.text === '$(diff) Clause: 3 pending · 2 files');
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(pendingAt(api, second)!)));
-    await waitFor('one file to be left', () => api.summary.text === '$(diff) Claude: 2 pending · 1 file');
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(pendingAt(api, second)!)));
+    await waitFor('one file to be left', () => api.summary.text === '$(diff) Clause: 2 pending · 1 file');
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(pendingAt(api, first)!)));
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(pendingAt(api, first)!)));
     await waitFor('the count to go away', () => api.summary.text === undefined);
   });
 });
@@ -180,12 +180,12 @@ describe('the badge and the heading of the view', () => {
     assert.equal(api.summary.badgeTooltip, '2 files · 3 changes to review');
     assert.equal(api.summary.viewDescription, '2 files · 3 changes');
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(pendingAt(api, second)!)));
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(pendingAt(api, second)!)));
     await waitFor('one file to be left', () => api.summary.badge === 1);
     assert.equal(api.summary.badgeTooltip, '1 file · 2 changes to review');
     assert.equal(api.summary.viewDescription, '1 file · 2 changes');
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(pendingAt(api, first)!)));
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(pendingAt(api, first)!)));
     await waitFor('the badge to go away', () => api.summary.badge === undefined);
     assert.equal(api.summary.viewDescription, undefined);
   });
@@ -250,7 +250,7 @@ describe('the tints in an editor', () => {
     const editor = await openPending(seedEdited('a.txt', BEFORE, AFTER));
     await waitFor('the tints', () => api.decorations.appliedTo(editor)?.added.length === 2);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(await onlyPendingFile(api))));
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(await onlyPendingFile(api))));
 
     await waitFor('the tints to go', () => api.decorations.appliedTo(editor)?.added.length === 0);
   });

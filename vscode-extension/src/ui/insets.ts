@@ -20,7 +20,7 @@ export const MAX_BLOCKS_WITH_INSETS = 16;
 const PROPOSAL_NOT_ENABLED = /CANNOT use API proposal/;
 
 const ENABLE_HINT =
-  'The editor has not allowed this extension to use the editorInsets proposal, so blocks are marked with CodeLens instead. To get the inline rows and the Keep and Discard bar, add "local.claude-pending-edits" to "enable-proposed-api" in the editor\'s argv.json and restart it.';
+  'The editor has not allowed this extension to use the editorInsets proposal, so blocks are marked with CodeLens instead. To get the inline rows and the Keep and Discard bar, add "local.clause" to "enable-proposed-api" in the editor\'s argv.json and restart it.';
 
 /** The counter an inset's page shows. Rows with no bar have no page script to show it in. */
 const counterOf = (item: InsetItem) => (item.bar ? counterText(item.position, item.total) : undefined);
@@ -257,7 +257,7 @@ export class Insets implements vscode.Disposable {
     try {
       if (action === 'keep' || action === 'discard') {
         const target: BlockTarget = { kind: 'block', id: file.id, block: live.item.block };
-        await vscode.commands.executeCommand(action === 'keep' ? 'claudePending.keepBlock' : 'claudePending.discardBlock', target);
+        await vscode.commands.executeCommand(action === 'keep' ? 'clause.keepBlock' : 'clause.discardBlock', target);
       } else {
         this.#moveTo(editor, file.state, live.item.block, action === 'next' ? 1 : -1);
       }

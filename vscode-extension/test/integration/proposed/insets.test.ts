@@ -112,7 +112,7 @@ describe('the inline view, where the editor allows the editorInsets proposal', (
     const editor = await openWithInsets(path, 3);
     const [, , third] = drawn(editor);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepBlock', blockTarget(file, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.keepBlock', blockTarget(file, 0)));
 
     await waitFor('both insets of the first block to go', () => drawn(editor).length === 1);
     const [only] = drawn(editor);
@@ -132,7 +132,7 @@ describe('the inline view, where the editor allows the editorInsets proposal', (
     assert.equal(drawn(editor).at(-1)!.counter, `${MAX_BLOCKS_WITH_INSETS} of 20`);
     const lenses = await lensesOf(editor);
     assert.deepEqual(
-      lenses.filter((lens) => lens.command?.command === 'claudePending.keepBlock').map((lens) => lens.range.start.line),
+      lenses.filter((lens) => lens.command?.command === 'clause.keepBlock').map((lens) => lens.range.start.line),
       Array.from({ length: 20 - MAX_BLOCKS_WITH_INSETS }, (_, index) => 2 * (MAX_BLOCKS_WITH_INSETS + index)),
     );
   });
@@ -249,7 +249,7 @@ describe('the inline view, where the editor allows the editorInsets proposal', (
     const file = await onlyPendingFile(api);
     const editor = await openWithInsets(path, 3);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', { kind: 'file', id: file.id }));
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', { kind: 'file', id: file.id }));
 
     await waitFor('the insets to go', () => drawn(editor).length === 0);
   });
