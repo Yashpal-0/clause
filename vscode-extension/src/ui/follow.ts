@@ -21,7 +21,7 @@ export const TYPING_IDLE_MS = 3000;
 /**
  * Opens the file Claude has just edited, at the block it changed, so that the
  * change can be reviewed without finding the file first. Setting
- * `claudePending.followEdits` turns it off.
+ * `clause.followEdits` turns it off.
  */
 export class Follow implements vscode.Disposable {
   /** Read each time it is used, so a test can shorten both. */
@@ -106,7 +106,7 @@ export class Follow implements vscode.Disposable {
   }
 
   #enabled(): boolean {
-    return vscode.workspace.getConfiguration('claudePending').get<boolean>('followEdits', true);
+    return vscode.workspace.getConfiguration('clause').get<boolean>('followEdits', true);
   }
 }
 

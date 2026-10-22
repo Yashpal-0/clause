@@ -46,7 +46,7 @@ for (const { name, file, baseline, current } of CASES) {
       const path = seedEdited(file, baseline, current);
       const pending = await onlyPendingFile(api);
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(pending)));
+      assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(pending)));
 
       holdsBytes(path, baseline);
       assert.equal(hasEntry(path), false);
@@ -56,7 +56,7 @@ for (const { name, file, baseline, current } of CASES) {
       const path = seedEdited(file, baseline, current);
       const pending = await onlyPendingFile(api);
 
-      assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(pending)));
+      assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(pending)));
 
       holdsBytes(path, current);
       assert.equal(hasEntry(path), false);
@@ -67,7 +67,7 @@ for (const { name, file, baseline, current } of CASES) {
       const pending = await onlyPendingFile(api);
       const block = { kind: 'changed', baseStart: 0, baseEnd: 1, curStart: 0, curEnd: 1 };
 
-      for (const command of ['claudePending.keepBlock', 'claudePending.discardBlock']) {
+      for (const command of ['clause.keepBlock', 'clause.discardBlock']) {
         const result = await vscode.commands.executeCommand<Outcome>(command, { kind: 'block', id: pending.id, block });
         assert.equal(result.ok, false, command);
       }
@@ -106,7 +106,7 @@ describe('a file that is not UTF-8, open in the editor', () => {
     );
     assert.deepEqual(
       lenses.map((lens) => lens.command?.command),
-      ['', 'claudePending.discardFile', 'claudePending.keepFile', 'claudePending.openDiff'],
+      ['', 'clause.discardFile', 'clause.keepFile', 'clause.openDiff'],
     );
   });
 
@@ -114,7 +114,7 @@ describe('a file that is not UTF-8, open in the editor', () => {
     const path = seedEdited('latin1.txt', LATIN1_BASELINE, LATIN1_CURRENT);
     await onlyPendingFile(api);
     const lenses = await lensesOf(await open(path));
-    const undo = lenses.find((lens) => lens.command?.command === 'claudePending.discardFile')!.command!;
+    const undo = lenses.find((lens) => lens.command?.command === 'clause.discardFile')!.command!;
 
     assertOk(await vscode.commands.executeCommand(undo.command, ...(undo.arguments ?? [])));
 

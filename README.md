@@ -10,8 +10,10 @@ once. Close Claude, close the editor, reboot. Your review is right where you lef
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![VS Code 1.100+ and Cursor](https://img.shields.io/badge/VS%20Code%201.100%2B%20%7C%20Cursor-extension-007ACC?logo=visualstudiocode&logoColor=white)](#quick-start)
-[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D97757?logo=claude&logoColor=white)](#quick-start)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8957E5.svg)](#quick-start)
 [![Plugin dependencies: 0](https://img.shields.io/badge/plugin%20dependencies-0-brightgreen.svg)](claude-plugin/)
+
+<sub>An independent open-source project. Not affiliated with or endorsed by Anthropic.</sub>
 
 </div>
 
@@ -72,9 +74,9 @@ git clone https://github.com/Yashpal-0/clause.git
 cd clause/vscode-extension
 npm install
 npm run build
-npx vsce package --no-dependencies --allow-missing-repository --skip-license
-code --install-extension claude-pending-edits-0.1.0.vsix      # VS Code
-cursor --install-extension claude-pending-edits-0.1.0.vsix    # Cursor
+npx vsce package --no-dependencies --allow-missing-repository
+code --install-extension clause-0.1.0.vsix      # VS Code
+cursor --install-extension clause-0.1.0.vsix    # Cursor
 ```
 
 **2. Allow the proposed API (once per editor)**
@@ -85,7 +87,7 @@ to `~/.vscode/argv.json` for VS Code and to `~/.cursor/argv.json` for Cursor (in
 command palette entry is *Preferences: Configure Runtime Arguments*):
 
 ```jsonc
-"enable-proposed-api": ["local.claude-pending-edits"]
+"enable-proposed-api": ["local.clause"]
 ```
 
 Then quit the editor completely and start it again; `argv.json` is read at startup. Without this
@@ -96,7 +98,7 @@ removed lines, and the Discard/Keep bar as a CodeLens above each block.
 
 ```sh
 claude plugin marketplace add /path/to/clause      # the folder you cloned
-claude plugin install pending-edits@claude-pending-edits --scope user
+claude plugin install pending-edits@clause --scope user
 ```
 
 Start a new Claude Code session, or run `/reload-plugins` in a running one. Claude Code runs a copy
@@ -132,8 +134,8 @@ too.
 
 The keys work while an editor has focus. `Ctrl+Y` and `Ctrl+N` are active only while the cursor is
 inside a block, and there they take over Redo and New File. Every command is in the command
-palette under "Claude Pending: …", and every key can be rebound in Keyboard Shortcuts (the command
-ids are `claudePending.keepBlock`, `claudePending.discardBlock` and so on).
+palette under "Clause: …", and every key can be rebound in Keyboard Shortcuts (the command
+ids are `clause.keepBlock`, `clause.discardBlock` and so on).
 
 Rules worth knowing:
 
@@ -170,7 +172,7 @@ In every editor that shows a file with pending changes:
   diff and next/previous block.
 - The **Clause** view in the Source Control sidebar lists files, then blocks, each with Keep and
   Discard buttons, and Keep All / Discard All at the top.
-- The status bar shows `Claude: 3 pending · 2 files` and opens that view.
+- The status bar shows `Clause: 3 pending · 2 files` and opens that view.
 - When Claude edits a file, the editor opens it at the changed block on its own, as a preview tab
   and without taking keyboard focus. This is **Follow**; see Settings.
 - In the file tree and on editor tabs, a file with pending changes has a violet `◆` after its name
@@ -216,9 +218,9 @@ Claude Code ──hooks──▶  ~/.claude/pending-edits/  ◀──watches─�
 
 | Setting | Default | Effect |
 |---|---|---|
-| `claudePending.followEdits` | on | Open the file Claude has just edited, at the changed block |
+| `clause.followEdits` | on | Open the file Claude has just edited, at the changed block |
 
-The colour of the file tree marker is the workbench colour `claudePending.explorerForeground`
+The colour of the file tree marker is the workbench colour `clause.explorerForeground`
 (default `charts.purple`). Change it in `workbench.colorCustomizations`.
 
 **Follow.** About 0.4 s after the last edit lands, the editor opens the file as a preview tab,
@@ -362,10 +364,10 @@ Deleting the folder clears all pending state. Every file keeps whatever it conta
 ## Uninstall
 
 ```sh
-claude plugin uninstall pending-edits@claude-pending-edits
-claude plugin marketplace remove claude-pending-edits
-code --uninstall-extension local.claude-pending-edits
-cursor --uninstall-extension local.claude-pending-edits
+claude plugin uninstall pending-edits@clause
+claude plugin marketplace remove clause
+code --uninstall-extension local.clause
+cursor --uninstall-extension local.clause
 ```
 
 Then remove the `enable-proposed-api` entry from `~/.vscode/argv.json` and `~/.cursor/argv.json`,
@@ -399,3 +401,11 @@ why `CLAUDE_PENDING_EDITS_DIR` exists.
 ## License
 
 [MIT](LICENSE) © 2026 Yashpal Yadav. Use it, fork it, ship it.
+
+The extension bundles [jsdiff](https://github.com/kpdecker/jsdiff) (BSD-3-Clause). Its notice is in
+[`vscode-extension/THIRD_PARTY_NOTICES.md`](vscode-extension/THIRD_PARTY_NOTICES.md) and ships
+inside the `.vsix`.
+
+Clause is an independent project. It is not affiliated with, endorsed by or sponsored by
+Anthropic. Claude and Claude Code are trademarks of Anthropic, PBC. They, and the other product
+names in this README, are used only to say what Clause works with.

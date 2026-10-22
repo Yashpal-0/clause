@@ -118,11 +118,11 @@ body {
   white-space: pre;
   overflow: hidden;
   tab-size: ${tabSize};
-  background: var(--vscode-claudePending-removedBackground, #98044040);
+  background: var(--vscode-clause-removedBackground, #98044040);
 }
 .note { font-style: italic; color: var(--vscode-descriptionForeground); }
 .bar-row { flex: ${BAR_ROW_LINES} 1 0; min-height: 0; box-sizing: border-box; display: flex; justify-content: flex-end; padding-right: ${SCROLLBAR_CLEARANCE_PX}px; }
-.bar-row.added { background: var(--vscode-claudePending-addedBackground, #388d5b40); }
+.bar-row.added { background: var(--vscode-clause-addedBackground, #388d5b40); }
 /* The buttons fill the row less 2px above and below, which keeps them off the rows above and the line below. */
 .bar {
   box-sizing: border-box;
@@ -158,7 +158,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   color: var(--vscode-foreground);
   border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, #454545));
 }
-.keep { background: var(--vscode-claudePending-keepBackground, #388d5b); color: var(--vscode-claudePending-keepForeground, #101010); }
+.keep { background: var(--vscode-clause-keepBackground, #388d5b); color: var(--vscode-clause-keepForeground, #101010); }
 .keep:hover { filter: brightness(1.1); }
 .key { opacity: 0.75; }
 </style>

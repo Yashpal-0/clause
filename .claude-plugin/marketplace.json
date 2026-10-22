@@ -1,5 +1,5 @@
 {
-  "name": "claude-pending-edits",
+  "name": "clause",
   "description": "Cursor-style Keep/Discard review for the edits Claude Code makes.",
   "owner": {
     "name": "Yashpal-0"
