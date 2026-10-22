@@ -3,16 +3,37 @@
   "displayName": "Clause",
   "description": "Keep or Discard every edit Claude Code makes, per block, per file or all at once, across prompts and restarts.",
   "version": "0.1.0",
-  "publisher": "local",
-  "private": true,
+  "publisher": "clause",
   "license": "MIT",
   "icon": "images/icon.png",
+  "homepage": "https://github.com/Yashpal-0/clause#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yashpal-0/clause.git",
+    "directory": "vscode-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/Yashpal-0/clause/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude code",
+    "ai",
+    "review",
+    "diff",
+    "pending edits",
+    "keep",
+    "discard",
+    "cursor"
+  ],
   "engines": {
     "vscode": "^1.100.0"
   },
   "scripts": {
     "typecheck": "tsc -p .",
     "build": "node esbuild.mjs",
+    "vscode:prepublish": "npm run build && node -e \"require('node:fs').copyFileSync('../README.md', 'README.md')\"",
+    "package": "vsce package --no-dependencies --baseContentUrl https://github.com/Yashpal-0/clause/blob/master --baseImagesUrl https://github.com/Yashpal-0/clause/raw/master",
     "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/unit/*.test.ts\"",
     "test:integration": "node esbuild.mjs --tests && xvfb-run -a vscode-test",
     "test": "npm run typecheck && npm run test:unit"

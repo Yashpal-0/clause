@@ -2,7 +2,8 @@
 # so the package needs only the manifest, the bundle, the icon the manifest points at, and the
 # licenses that have to travel with the code inside it: Clause's own and THIRD_PARTY_NOTICES.md for
 # the inlined dependencies. images/icon.svg is the master the PNG is rendered from; it stays in the
-# repository.
+# repository. README.md is not listed: vsce always includes it, and vscode:prepublish copies the
+# repository's README into this folder first (vsce cannot read one from outside it).
 # Naming what to keep means a new folder (tests, scratch output, source maps) cannot end up in
 # the package by accident.
 **

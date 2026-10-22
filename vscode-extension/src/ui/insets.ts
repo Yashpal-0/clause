@@ -20,7 +20,7 @@ export const MAX_BLOCKS_WITH_INSETS = 16;
 const PROPOSAL_NOT_ENABLED = /CANNOT use API proposal/;
 
 const ENABLE_HINT =
-  'The editor has not allowed this extension to use the editorInsets proposal, so blocks are marked with CodeLens instead. To get the inline rows and the Keep and Discard bar, add "local.clause" to "enable-proposed-api" in the editor\'s argv.json and restart it.';
+  'The editor has not allowed this extension to use the editorInsets proposal, so blocks are marked with CodeLens instead. To get the inline rows and the Keep and Discard bar, add "clause.clause" to "enable-proposed-api" in the editor\'s argv.json and restart it.';
 
 /** The counter an inset's page shows. Rows with no bar have no page script to show it in. */
 const counterOf = (item: InsetItem) => (item.bar ? counterText(item.position, item.total) : undefined);

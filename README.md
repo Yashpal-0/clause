@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="vscode-extension/images/icon.svg" width="112" height="112" alt="Clause logo: a violet C holding a diamond split into a mint half and a coral half">
+<img src="vscode-extension/images/icon.png" width="112" height="112" alt="Clause logo: a violet C holding a diamond split into a mint half and a coral half">
 
 # Clause
 
@@ -70,16 +70,22 @@ sign. Hence the name.
 You need Claude Code, Node.js on the `PATH` of the process that starts Claude Code, and VS Code
 1.100+ or Cursor. Details are under [Requirements](#requirements).
 
-**1. Build and install the extension**
+**1. Install the extension**
+
+Download `clause-0.1.0.vsix` from the [latest release](https://github.com/Yashpal-0/clause/releases/latest), then:
+
+```sh
+code --install-extension clause-0.1.0.vsix      # VS Code
+cursor --install-extension clause-0.1.0.vsix    # Cursor
+```
+
+Or build the same file from source:
 
 ```sh
 git clone https://github.com/Yashpal-0/clause.git
 cd clause/vscode-extension
 npm install
-npm run build
-npx vsce package --no-dependencies --allow-missing-repository
-code --install-extension clause-0.1.0.vsix      # VS Code
-cursor --install-extension clause-0.1.0.vsix    # Cursor
+npm run package
 ```
 
 **2. Allow the proposed API (once per editor)**
@@ -90,7 +96,7 @@ to `~/.vscode/argv.json` for VS Code and to `~/.cursor/argv.json` for Cursor (in
 command palette entry is *Preferences: Configure Runtime Arguments*):
 
 ```jsonc
-"enable-proposed-api": ["local.clause"]
+"enable-proposed-api": ["clause.clause"]
 ```
 
 Then quit the editor completely and start it again; `argv.json` is read at startup. Without this
@@ -322,9 +328,9 @@ first, which can be git.
   ones, and its bar below them. At most 16 blocks per editor use the new view, so at most 32
   webviews; further blocks use the CodeLens fallback. An inset shows at most 200 removed lines (Open
   diff shows all).
-- It relies on a proposed API: the extension cannot be published to the Marketplace, and an editor
-  update can change the proposal. If that happens the extension falls back to the plainer view and
-  no data is affected.
+- It relies on a proposed API: the VS Code Marketplace refuses an extension that declares one, so
+  Clause comes as a `.vsix` from the GitHub releases, and an editor update can change the
+  proposal. If that happens the extension falls back to the plainer view and no data is affected.
 - Code folding, word wrap and editor zoom have not been tried with the view on.
 
 **File tree and Follow**
@@ -400,8 +406,8 @@ Deleting the folder clears all pending state. Every file keeps whatever it conta
 ```sh
 claude plugin uninstall pending-edits@clause
 claude plugin marketplace remove clause
-code --uninstall-extension local.clause
-cursor --uninstall-extension local.clause
+code --uninstall-extension clause.clause
+cursor --uninstall-extension clause.clause
 ```
 
 Then remove the `enable-proposed-api` entry from `~/.vscode/argv.json` and `~/.cursor/argv.json`,
