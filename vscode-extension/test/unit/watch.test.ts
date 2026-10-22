@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { watchDirectory } from '../../src/watch.ts';
 
-const scratch = () => mkdtempSync(join(tmpdir(), 'claude-pending-watch-'));
+const scratch = () => mkdtempSync(join(tmpdir(), 'clause-watch-'));
 
 /** Polls until `condition` holds; file watchers have no fixed latency. */
 async function until(condition: () => boolean, what: string): Promise<void> {

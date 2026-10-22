@@ -30,7 +30,7 @@ describe('a file Claude created', () => {
     const path = seedCreated('new.txt', 'hello\n');
     const file = await onlyPendingFile(api);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(file)));
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(file)));
 
     assert.equal(read(path), 'hello\n');
     assert.equal(hasEntry(path), false);
@@ -41,7 +41,7 @@ describe('a file Claude created', () => {
     const path = seedCreated('new.txt', 'hello\n');
     const file = await onlyPendingFile(api);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepBlock', blockTarget(file, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.keepBlock', blockTarget(file, 0)));
 
     assert.equal(read(path), 'hello\n');
     assert.equal(hasEntry(path), false);
@@ -54,7 +54,7 @@ describe('a file Claude created', () => {
     const path = seedCreated('new.txt', text);
     const file = await onlyPendingFile(api);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(file)));
+    assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(file)));
 
     assert.equal(existsSync(path), false);
     assert.equal(hasEntry(path), false);
@@ -73,7 +73,7 @@ describe('a file Claude created', () => {
     const path = seedCreated('new.txt', 'hello\n');
     const file = await onlyPendingFile(api);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(file, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(file, 0)));
 
     assert.equal(existsSync(path), false);
     assert.equal(hasEntry(path), false);
@@ -87,7 +87,7 @@ describe('a file Claude created', () => {
     const isOpen = () => vscode.window.tabGroups.all.flatMap((group) => group.tabs).some((tab) => tab.input instanceof vscode.TabInputText && tab.input.uri.fsPath === path);
     assert.equal(isOpen(), true, 'the file is open before it is discarded');
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(file)));
+    assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(file)));
 
     assert.equal(isOpen(), false);
   });
@@ -97,7 +97,7 @@ describe('a file Claude created', () => {
     const path = seedCreated('new.txt', 'hello\n');
     const file = await onlyPendingFile(api);
 
-    const result = await vscode.commands.executeCommand<Outcome>('claudePending.discardFile', fileTarget(file));
+    const result = await vscode.commands.executeCommand<Outcome>('clause.discardFile', fileTarget(file));
 
     assert.equal(result.ok, false);
     assert.match(result.reason ?? '', /^Could not move new\.txt to the trash: /);
@@ -146,7 +146,7 @@ describe('a file deleted after Claude changed it', () => {
   it('is written back from the baseline when discarded', async () => {
     const path = await seedThenDelete('a\nb\n', 'a\nB\n');
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(pendingAt(api, path)!)));
+    assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(pendingAt(api, path)!)));
 
     assert.equal(read(path), 'a\nb\n');
     assert.equal(hasEntry(path), false);
@@ -155,7 +155,7 @@ describe('a file deleted after Claude changed it', () => {
   it('is written back by Discard on its only block, too', async () => {
     const path = await seedThenDelete('a\nb\n', 'a\nB\n');
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(pendingAt(api, path)!, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(pendingAt(api, path)!, 0)));
 
     assert.equal(read(path), 'a\nb\n');
   });
@@ -165,7 +165,7 @@ describe('a file deleted after Claude changed it', () => {
     rmSync(dirname(path), { recursive: true });
     await api.model.refreshAll();
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(pendingAt(api, path)!)));
+    assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(pendingAt(api, path)!)));
 
     assert.equal(read(path), 'a\nb\n');
   });
@@ -173,7 +173,7 @@ describe('a file deleted after Claude changed it', () => {
   it('stays deleted when kept, and is no longer pending', async () => {
     const path = await seedThenDelete('a\nb\n', 'a\nB\n');
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(pendingAt(api, path)!)));
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(pendingAt(api, path)!)));
 
     assert.equal(existsSync(path), false);
     assert.equal(hasEntry(path), false);

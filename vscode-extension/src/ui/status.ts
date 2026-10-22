@@ -10,7 +10,7 @@ import { scopedCounts } from './scope.ts';
  */
 export class Summary implements vscode.Disposable {
   readonly #model: PendingModel;
-  readonly #item = vscode.window.createStatusBarItem('claudePending.status', vscode.StatusBarAlignment.Left, 100);
+  readonly #item = vscode.window.createStatusBarItem('clause.status', vscode.StatusBarAlignment.Left, 100);
   readonly #view: vscode.TreeView<unknown>;
   readonly #subscription: vscode.Disposable;
 
@@ -18,7 +18,7 @@ export class Summary implements vscode.Disposable {
     this.#model = model;
     this.#view = view;
     this.#item.name = 'Clause';
-    this.#item.command = 'claudePending.focus';
+    this.#item.command = 'clause.focus';
     this.#item.tooltip = 'Pending changes that you have not kept or discarded. Click to review them.';
     this.#subscription = model.onDidChange(() => this.update());
     this.update();

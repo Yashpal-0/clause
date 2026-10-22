@@ -9,7 +9,7 @@ import { extensionApi, hasEntry, onlyPendingFile, open, pendingAt, read, reset, 
 const BEFORE = 'one\ntwo\nthree\nfour\nfive\n';
 const AFTER = 'one\n2a\n2b\n2c\n2d\nfour\nfive\nsix\n';
 
-const KEY = 'claudePending.selectionInPending';
+const KEY = 'clause.selectionInPending';
 
 describe('keeping the selected lines of a change', () => {
   let api: ExtensionApi;
@@ -51,7 +51,7 @@ describe('keeping the selected lines of a change', () => {
     const { path, editor } = await openChanged();
     editor.selection = new vscode.Selection(2, 0, 4, 0);
 
-    await vscode.commands.executeCommand('claudePending.keepSelection');
+    await vscode.commands.executeCommand('clause.keepSelection');
 
     assert.equal(storedBaseline(path), 'one\ntwo\nthree\n2b\n2c\nfour\nfive\n');
     await waitFor('the block to shrink', () => pendingAt(api, path)?.state.blocks.length === 3);
@@ -67,7 +67,7 @@ describe('keeping the selected lines of a change', () => {
     const { path, editor } = await openChanged();
     editor.selection = new vscode.Selection(3, 1, 7, 2);
 
-    await vscode.commands.executeCommand('claudePending.keepSelection');
+    await vscode.commands.executeCommand('clause.keepSelection');
 
     await waitFor('the changes to shrink', () => left(path).length === 1);
     assert.deepEqual(left(path), [{ removed: ['two', 'three'], added: ['2a', '2b'] }]);
@@ -77,12 +77,12 @@ describe('keeping the selected lines of a change', () => {
     const { path, editor } = await openChanged();
 
     editor.selection = new vscode.Selection(1, 0, 5, 0);
-    await vscode.commands.executeCommand('claudePending.keepSelection');
+    await vscode.commands.executeCommand('clause.keepSelection');
     await waitFor('the first change to be gone', () => left(path).length === 1);
     assert.equal(storedBaseline(path), 'one\n2a\n2b\n2c\n2d\nfour\nfive\n');
 
     editor.selection = new vscode.Selection(0, 0, 8, 0);
-    await vscode.commands.executeCommand('claudePending.keepSelection');
+    await vscode.commands.executeCommand('clause.keepSelection');
     // At once, not after the delay with which the model forgets a file that looks decided.
     assert.equal(hasEntry(path), false);
     await waitFor('the file to be settled', () => api.model.files().length === 0);
@@ -95,7 +95,7 @@ describe('keeping the selected lines of a change', () => {
     await waitFor('the edit to show as part of the change', () => left(path)[0]?.added.includes('mine') === true);
 
     editor.selection = new vscode.Selection(2, 0, 3, 0);
-    await vscode.commands.executeCommand('claudePending.keepSelection');
+    await vscode.commands.executeCommand('clause.keepSelection');
 
     assert.equal(storedBaseline(path), 'one\ntwo\nthree\nmine\nfour\nfive\n');
     assert.equal(read(path), AFTER, 'nothing was saved by keeping');
@@ -105,9 +105,9 @@ describe('keeping the selected lines of a change', () => {
     const { path, editor } = await openChanged();
 
     editor.selection = new vscode.Selection(0, 0, 1, 0);
-    await vscode.commands.executeCommand('claudePending.keepSelection');
+    await vscode.commands.executeCommand('clause.keepSelection');
     editor.selection = new vscode.Selection(2, 1, 2, 1);
-    await vscode.commands.executeCommand('claudePending.keepSelection');
+    await vscode.commands.executeCommand('clause.keepSelection');
 
     assert.equal(messages.length, 2);
     assert.match(messages[0]!, /Select some lines of a pending change/);
@@ -120,7 +120,7 @@ describe('keeping the selected lines of a change', () => {
     const editor = await open(path);
     editor.selection = new vscode.Selection(0, 0, 2, 0);
 
-    await vscode.commands.executeCommand('claudePending.keepSelection');
+    await vscode.commands.executeCommand('clause.keepSelection');
 
     assert.equal(messages.length, 1);
     assert.equal(hasEntry(path), true);
@@ -169,7 +169,7 @@ describe('keeping the selected lines of a change', () => {
       editor.selection = new vscode.Selection(2, 0, 3, 0);
       await waitFor('the key to turn on', () => api.context.value(KEY) === true);
 
-      await vscode.commands.executeCommand('claudePending.keepSelection');
+      await vscode.commands.executeCommand('clause.keepSelection');
 
       await waitFor('the key to turn off', () => api.context.value(KEY) === false);
     });

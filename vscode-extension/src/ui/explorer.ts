@@ -3,7 +3,7 @@ import { changedMarks, folderMarks, MARKER_BADGE, markerTooltip } from '../marks
 import type { PendingModel } from '../pending.ts';
 import { NewestRegistration } from '../registration.ts';
 
-const markerColour = () => new vscode.ThemeColor('claudePending.explorerForeground');
+const markerColour = () => new vscode.ThemeColor('clause.explorerForeground');
 
 /**
  * Marks the files that have changes waiting for Keep or Discard, and the

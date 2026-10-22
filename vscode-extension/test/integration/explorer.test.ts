@@ -70,7 +70,7 @@ describe('the mark on files that have changes waiting', () => {
 
     assert.equal(decoration?.badge, '◆');
     assert.equal(decoration?.tooltip, '1 change waiting for Keep or Discard');
-    assert.equal(decoration?.color?.id, 'claudePending.explorerForeground');
+    assert.equal(decoration?.color?.id, 'clause.explorerForeground');
     assert.equal(decoration?.propagate, true);
   });
 
@@ -110,7 +110,7 @@ describe('the mark on files that have changes waiting', () => {
     // The colour is the folder's own: a folder that only inherited the files' marks would take the colour of whichever decoration VS Code asked first, git's included.
     for (const folder of [dirname(path), workspaceDir()]) {
       const decoration = decorationOf(folder);
-      assert.equal(decoration?.color?.id, 'claudePending.explorerForeground', `the colour of ${folder}`);
+      assert.equal(decoration?.color?.id, 'clause.explorerForeground', `the colour of ${folder}`);
       assert.equal(decoration?.badge, undefined, `no badge on ${folder}`);
     }
     assert.equal(decorationOf(dirname(workspaceDir())), undefined, 'the folder that holds the workspace folder');

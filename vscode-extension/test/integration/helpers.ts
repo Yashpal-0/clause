@@ -8,7 +8,7 @@ import type { ExtensionApi } from '../../src/extension.ts';
 import type { PendingFile } from '../../src/pending.ts';
 import type { BlockTarget, FileTarget } from '../../src/targets.ts';
 
-export const EXTENSION_ID = 'local.claude-pending-edits';
+export const EXTENSION_ID = 'local.clause';
 
 export async function extensionApi(): Promise<ExtensionApi> {
   const extension = vscode.extensions.getExtension<ExtensionApi>(EXTENSION_ID);
