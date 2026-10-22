@@ -21,6 +21,25 @@ the `PATH` of the process that starts Claude Code, because the hooks run `node`.
 its one-time setup are described in the
 [project README](https://github.com/Yashpal-0/clause#quick-start).
 
+## Try it
+
+With the extension installed in VS Code or Cursor:
+
+1. **Review as Claude works.** Put Claude Code in accept-edits mode (Shift+Tab) and ask for a change
+   to a few files. Open one in the editor: Claude's lines are green, the lines it replaced are red,
+   `Ctrl+Y` keeps a block and `Ctrl+N` discards it.
+2. **Come back later.** Close Claude and the editor, or reboot, then reopen the folder. Every block
+   you haven't decided on is still pending.
+3. **Discard and carry on.** Discard a block, then send your next prompt. Claude is told which files
+   lost changes, so it re-reads them instead of building on code that is gone.
+
+If nothing shows up, check that `node` is on the `PATH` of the process that starts Claude Code
+(without it the hooks fail quietly and record nothing), that the session started after the plugin was
+installed (or run `/reload-plugins`), and `~/.claude/pending-edits/errors.log`, where hook failures
+are written. Edits made by shell commands such as `sed -i` appear only after you turn on
+`bashEditDiffEnabled` in `~/.claude/settings.json`. The
+[project README](https://github.com/Yashpal-0/clause#limits) lists the known limits.
+
 ## What it runs
 
 Five hook events, each running `node` on `hook.mjs` from this plugin's own folder. There is no
