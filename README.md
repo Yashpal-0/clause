@@ -107,7 +107,7 @@ removed lines, and the Discard/Keep bar as a CodeLens above each block.
 
 ```sh
 claude plugin marketplace add /path/to/clause      # the folder you cloned
-claude plugin install pending-edits@clause --scope user
+claude plugin install clause@clause --scope user
 ```
 
 Start a new Claude Code session, or run `/reload-plugins` in a running one. Claude Code runs a copy
@@ -406,7 +406,7 @@ Deleting the folder clears all pending state. Every file keeps whatever it conta
 ## Uninstall
 
 ```sh
-claude plugin uninstall pending-edits@clause
+claude plugin uninstall clause@clause
 claude plugin marketplace remove clause
 code --uninstall-extension clause.clause
 cursor --uninstall-extension clause.clause
