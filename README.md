@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="vscode-extension/images/icon.svg" width="112" height="112" alt="Clause logo: a violet C holding a diamond split into a mint half and a coral half">
+
 # Clause
 
 ### Every edit Claude Code makes is a clause you haven't signed yet.

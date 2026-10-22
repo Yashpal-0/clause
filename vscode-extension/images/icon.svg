@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="title desc">
+  <title id="title">Clause</title>
+  <desc id="desc">A violet C holding a diamond set into its mouth. The diamond is split in two, mint above and coral below: a pending change, waiting to be kept or discarded.</desc>
+  <defs>
+    <linearGradient id="tile" x1="70" y1="0" x2="450" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2D2278"/>
+      <stop offset="1" stop-color="#0D0927"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="228" cy="256" r="250" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C5CFF" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#7C5CFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="102" y1="100" x2="342" y2="410" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4F0FF"/>
+      <stop offset="1" stop-color="#A28BFF"/>
+    </linearGradient>
+    <linearGradient id="keep" x1="0" y1="168" x2="0" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#86F5C8"/>
+      <stop offset="1" stop-color="#1FC48A"/>
+    </linearGradient>
+    <linearGradient id="drop" x1="0" y1="256" x2="0" y2="344" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF5C7F"/>
+      <stop offset="1" stop-color="#FF9BAE"/>
+    </linearGradient>
+    <!-- Cuts the C along the diamond's outline plus a 14px gap, so the diamond looks set into it. -->
+    <mask id="inlay" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="#fff"/>
+      <path d="M348 178 L426 256 L348 334 L270 256 Z" fill="#000" stroke="#000" stroke-width="40" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#tile)"/>
+  <rect width="512" height="512" rx="116" fill="url(#glow)"/>
+  <rect x="1" y="1" width="510" height="510" rx="115" fill="none" stroke="#fff" stroke-opacity=".09" stroke-width="2"/>
+  <path d="M334 204.3A118 118 0 1 0 334 307.7" fill="none" stroke="url(#ring)" stroke-width="62" mask="url(#inlay)"/>
+  <g stroke-linejoin="round" stroke-width="12">
+    <path d="M348 178 L423 253 H273 Z" fill="url(#keep)" stroke="url(#keep)"/>
+    <path d="M273 259 H423 L348 334 Z" fill="url(#drop)" stroke="url(#drop)"/>
+  </g>
+</svg>

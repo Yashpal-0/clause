@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 interface Manifest {
+  icon?: string;
   dependencies?: Record<string, string>;
   contributes: {
     commands?: { command: string; title: string; category?: string; icon?: string }[];
@@ -159,6 +160,19 @@ test('the package carries the license of Clause and of every dependency the bund
   const dependencies = Object.keys(manifest.dependencies ?? {});
   assert.ok(dependencies.length > 0, 'the scan found no dependencies; it may be looking in the wrong place');
   for (const name of dependencies) assert.ok(notices.includes(`\`${name}\``), `THIRD_PARTY_NOTICES.md has a section for ${name}`);
+});
+
+test('the extension icon is a square PNG of at least 128 px that the package keeps', () => {
+  // The Marketplace and the Extensions view reject or blur anything else; an SVG is not accepted as the icon.
+  assert.equal(manifest.icon, 'images/icon.png');
+  const png = readFileSync(new URL(`../../${manifest.icon}`, import.meta.url));
+
+  assert.equal(png.subarray(1, 4).toString('latin1'), 'PNG', 'the file is a PNG');
+  const [width, height] = [png.readUInt32BE(16), png.readUInt32BE(20)];
+  assert.equal(width, height, 'the icon is square');
+  assert.ok(width >= 128, `the icon is ${width} px wide; the Marketplace wants at least 128`);
+  const kept = readFileSync(new URL('../../.vscodeignore', import.meta.url), 'utf8').split('\n').map((line) => line.trim());
+  assert.ok(kept.includes(`!${manifest.icon}`), '.vscodeignore keeps the icon in the package');
 });
 
 test('Review All Changes is a command with a button in the title of the panel, first among them, and an entry in the palette while anything is pending', () => {

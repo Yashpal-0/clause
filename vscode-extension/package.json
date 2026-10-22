@@ -6,6 +6,7 @@
   "publisher": "local",
   "private": true,
   "license": "MIT",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.100.0"
   },

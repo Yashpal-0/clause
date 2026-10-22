@@ -1,10 +1,13 @@
 # The extension is one esbuild bundle that inlines its dependencies and claude-plugin/store.mjs,
-# so the package needs only the manifest, the bundle, and the licenses that have to travel with
-# the code inside it: Clause's own and THIRD_PARTY_NOTICES.md for the inlined dependencies.
+# so the package needs only the manifest, the bundle, the icon the manifest points at, and the
+# licenses that have to travel with the code inside it: Clause's own and THIRD_PARTY_NOTICES.md for
+# the inlined dependencies. images/icon.svg is the master the PNG is rendered from; it stays in the
+# repository.
 # Naming what to keep means a new folder (tests, scratch output, source maps) cannot end up in
 # the package by accident.
 **
 !package.json
 !dist/extension.js
+!images/icon.png
 !LICENSE
 !THIRD_PARTY_NOTICES.md
