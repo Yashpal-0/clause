@@ -177,6 +177,17 @@ test('the extension icon is a square PNG of at least 128 px that the package kee
   assert.ok(kept.includes(`!${manifest.icon}`), '.vscodeignore keeps the icon in the package');
 });
 
+test('the plugin folder ships the same license and icon as the repository', () => {
+  // A marketplace install copies only claude-plugin/, and the Claude directory reads its license and icon from there.
+  // This lives here, not beside the plugin's tests: the directory holds a plugin whose scripts name an image for review.
+  const copies = { LICENSE: '../../../LICENSE', 'icon.png': `../../${manifest.icon}` };
+  for (const [name, original] of Object.entries(copies)) {
+    const shipped = readFileSync(new URL(`../../../claude-plugin/${name}`, import.meta.url));
+
+    assert.ok(shipped.equals(readFileSync(new URL(original, import.meta.url))), `claude-plugin/${name} drifted: copy it again from the repository`);
+  }
+});
+
 test('every file that quotes the extension ID quotes the one the manifest declares', () => {
   // The ID is publisher.name, and the editor matches it exactly: a stale copy in the README's argv.json
   // entry silently leaves the inline view off, and one in the test setup runs the tests with no extension.
