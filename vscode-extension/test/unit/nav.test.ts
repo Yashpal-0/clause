@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Block } from '../../src/hunks.ts';
-import { anchorLine, blockAtLine, blockLabel, blockToShow, countsText, fileAfter, findBlock, nextBlock, partsToKeep, previousBlock, reviewOrder, selectedLineRanges, statusText } from '../../src/nav.ts';
+import { anchorLine, blockAfterSettled, blockAtLine, blockLabel, blockToShow, countsText, fileAfter, findBlock, nextBlock, partsToKeep, previousBlock, reviewOrder, selectedLineRanges, statusText } from '../../src/nav.ts';
 import { computeState } from '../../src/state.ts';
 
 const added = (curStart: number, curEnd: number, baseAt = curStart): Block => ({ kind: 'added', baseStart: baseAt, baseEnd: baseAt, curStart, curEnd });
@@ -273,4 +273,29 @@ test('lines are kept by selecting them in a file Claude edited, and in no other'
   assert.deepEqual(partsToKeep(state(false, null, 'a\nb\n'), lines), [], 'a file Claude created is one block: all or nothing');
   assert.deepEqual(partsToKeep(state(true, 'a\nb\n', null), lines), [], 'a file that is gone');
   assert.deepEqual(partsToKeep(computeState({ path: '/x/pic.bin', existed: true, baseline: Buffer.from([0, 1]), current: { bytes: Buffer.from([0, 2]) } }), lines), [], 'a file that is kept whole');
+});
+
+test('once a block is settled, the next one is the first block left at or below its line', () => {
+  const blocks = [added(2, 3), changed(8, 9, 6, 7), added(12, 14)];
+
+  assert.equal(blockAfterSettled(blocks, 4, 20), blocks[1], 'the block that was below it');
+  assert.equal(blockAfterSettled(blocks, 6, 20), blocks[1], 'a block that starts on its line, as when lines were put back in its place');
+  assert.equal(blockAfterSettled(blocks, 7, 20), blocks[2], 'not the block above it');
+});
+
+test('once the last block is settled, the next one is the first block, as Next Block wraps', () => {
+  const blocks = [added(2, 3), changed(8, 9, 6, 7)];
+
+  assert.equal(blockAfterSettled(blocks, 12, 20), blocks[0]);
+});
+
+test('once a block is settled, a block removed at the end of the text counts as below it', () => {
+  const blocks = [added(2, 3), removed(20, 20, 22)];
+
+  assert.equal(blockAfterSettled(blocks, 5, 20), blocks[1]);
+  assert.equal(blockAfterSettled(blocks, 19, 20), blocks[1], 'its anchor is the last line, the nearest there is');
+});
+
+test('there is nowhere to go once the last block of a file is settled', () => {
+  assert.equal(blockAfterSettled([], 3, 10), undefined);
 });

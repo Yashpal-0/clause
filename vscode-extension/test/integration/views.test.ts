@@ -158,6 +158,17 @@ describe('the status bar', () => {
     assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(pendingAt(api, first)!)));
     await waitFor('the count to go away', () => api.summary.text === undefined);
   });
+
+  it('has a button that goes to the next file to review, there for as long as something is pending and wherever the user is', async () => {
+    assert.equal(api.summary.reviewButton, undefined);
+    const path = seedEdited('a.txt', BEFORE, AFTER);
+
+    await waitFor('the button to appear', () => api.summary.reviewButton !== undefined);
+    assert.deepEqual(api.summary.reviewButton, { text: '$(arrow-right) Review Next File', command: 'clause.nextFile' });
+
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(pendingAt(api, path)!)));
+    await waitFor('the button to go away', () => api.summary.reviewButton === undefined);
+  });
 });
 
 describe('the badge and the heading of the view', () => {

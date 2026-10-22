@@ -53,7 +53,8 @@
       },
       {
         "command": "clause.keepSelection",
-        "title": "Keep Selected Lines"
+        "title": "Keep Selected Lines",
+        "category": "Clause"
       },
       {
         "command": "clause.keepFile",
@@ -84,6 +85,12 @@
         "title": "Open Diff",
         "category": "Clause",
         "icon": "$(diff)"
+      },
+      {
+        "command": "clause.reviewAll",
+        "title": "Review All Changes",
+        "category": "Clause",
+        "icon": "$(diff-multiple)"
       },
       {
         "command": "clause.nextBlock",
@@ -132,6 +139,11 @@
     },
     "menus": {
       "view/title": [
+        {
+          "command": "clause.reviewAll",
+          "when": "view == clause",
+          "group": "navigation@0"
+        },
         {
           "command": "clause.keepAll",
           "when": "view == clause",
@@ -222,6 +234,11 @@
       ],
       "editor/title": [
         {
+          "command": "clause.keepAll",
+          "when": "clause.hasPending && !clause.fileHasPending",
+          "group": "navigation@0"
+        },
+        {
           "command": "clause.previousBlock",
           "when": "clause.fileHasPending",
           "group": "navigation@1"
@@ -304,6 +321,10 @@
           "when": "clause.fileHasPending"
         },
         {
+          "command": "clause.reviewAll",
+          "when": "clause.hasPending"
+        },
+        {
           "command": "clause.nextBlock",
           "when": "clause.fileHasPending"
         },
@@ -377,6 +398,16 @@
       },
       {
         "command": "clause.nextFile",
+        "key": "ctrl+alt+c f",
+        "when": "editorTextFocus && clause.hasPending"
+      },
+      {
+        "command": "clause.previousFile",
+        "key": "ctrl+alt+c shift+f",
+        "when": "editorTextFocus && clause.hasPending"
+      },
+      {
+        "command": "clause.nextFile",
         "key": "alt+l",
         "when": "editorTextFocus && clause.hasPending"
       },
@@ -386,14 +417,14 @@
         "when": "editorTextFocus && clause.hasPending"
       },
       {
-        "command": "clause.nextFile",
-        "key": "ctrl+alt+c f",
-        "when": "editorTextFocus && clause.hasPending"
+        "command": "clause.keepFile",
+        "key": "ctrl+enter",
+        "when": "editorTextFocus && clause.fileHasPending"
       },
       {
-        "command": "clause.previousFile",
-        "key": "ctrl+alt+c shift+f",
-        "when": "editorTextFocus && clause.hasPending"
+        "command": "clause.discardFile",
+        "key": "ctrl+shift+backspace",
+        "when": "editorTextFocus && clause.fileHasPending"
       }
     ],
     "configuration": {

@@ -31,6 +31,11 @@ describe('the inline view, where the editor allows the editorInsets proposal', (
 
   const lensesOf = (editor: vscode.TextEditor) => vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', editor.document.uri);
 
+  // The file bar is never an inset, so it is all that is left of the CodeLens where the insets draw every block.
+  // With the one pending file in the window it has no way on to another file, only Discard file and Keep file.
+  const FILE_BAR = ['clause.discardFile', 'clause.keepFile'];
+  const commandsOf = async (editor: vscode.TextEditor) => (await lensesOf(editor)).map((lens) => lens.command?.command);
+
   it('draws the lines a block replaced as rows above its new lines, and its bar below them', async () => {
     const editor = await openWithInsets(seedEdited('a.txt', BEFORE, AFTER), 3);
 
@@ -55,7 +60,7 @@ describe('the inline view, where the editor allows the editorInsets proposal', (
     assert.match(replacedBar!.html, /data-action="keep"/);
     assert.doesNotMatch(replacedBar!.html, /class="rows"/, 'the bar has no rows of its own');
     assert.match(addedBar!.html, /class="bar-row added"/, 'the bar under new lines has their green');
-    assert.deepEqual(await lensesOf(editor), [], 'no CodeLens repeats what the insets already show');
+    assert.deepEqual(await commandsOf(editor), FILE_BAR, 'no CodeLens repeats what the insets already show');
   });
 
   it('closes the rows of a block that only removed lines with its bar, which stays plain', async () => {
@@ -89,7 +94,7 @@ describe('the inline view, where the editor allows the editorInsets proposal', (
   it('stands in for the CodeLens and the red marker of the block it is drawn for', async () => {
     const editor = await openWithInsets(seedEdited('a.txt', 'one\ntwo\nthree\n', 'one\nthree\n'), 1);
 
-    assert.deepEqual(await lensesOf(editor), []);
+    assert.deepEqual(await commandsOf(editor), FILE_BAR);
     await waitFor('the red marker to give way to the inset', () => api.decorations.appliedTo(editor)?.removed.length === 0);
   });
 
