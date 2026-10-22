@@ -42,7 +42,7 @@ describe('Keep All and Discard All', () => {
     it('keeps the files in this folder and leaves the ones outside it pending', async () => {
       const { inside, alsoInside, outside } = await seedScene();
 
-      assertOk(await vscode.commands.executeCommand('claudePending.keepAll'));
+      assertOk(await vscode.commands.executeCommand('clause.keepAll'));
 
       assert.equal(hasEntry(inside), false);
       assert.equal(hasEntry(alsoInside), false);
@@ -55,7 +55,7 @@ describe('Keep All and Discard All', () => {
     it('keeps only the ones outside the folder when called on their group', async () => {
       const { inside, alsoInside, outside } = await seedScene();
 
-      assertOk(await vscode.commands.executeCommand('claudePending.keepAll', { kind: 'group' }));
+      assertOk(await vscode.commands.executeCommand('clause.keepAll', { kind: 'group' }));
 
       assert.equal(hasEntry(outside), false);
       assert.equal(hasEntry(inside), true);
@@ -69,7 +69,7 @@ describe('Keep All and Discard All', () => {
     it('discards the files in this folder and leaves the ones outside it pending', async () => {
       const { inside, alsoInside, outside } = await seedScene();
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardAll'));
+      assertOk(await vscode.commands.executeCommand('clause.discardAll'));
 
       assert.equal(read(inside), BEFORE);
       assert.equal(read(alsoInside), 'x\ny\n');
@@ -82,7 +82,7 @@ describe('Keep All and Discard All', () => {
     it('discards only the ones outside the folder when called on their group', async () => {
       const { inside, alsoInside, outside } = await seedScene();
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardAll', { kind: 'group' }));
+      assertOk(await vscode.commands.executeCommand('clause.discardAll', { kind: 'group' }));
 
       assert.equal(read(outside), 'o\n');
       assert.equal(hasEntry(outside), false);
@@ -95,7 +95,7 @@ describe('Keep All and Discard All', () => {
       await seedScene();
       const asked = confirmationAnswers(true);
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardAll'));
+      assertOk(await vscode.commands.executeCommand('clause.discardAll'));
 
       assert.deepEqual(asked, [{ message: 'Discard pending changes in 2 files?', detail: '3 changes will be reverted.' }]);
     });
@@ -105,7 +105,7 @@ describe('Keep All and Discard All', () => {
       await waitFor('the file to be pending', () => api.model.files().length === 1);
       const asked = confirmationAnswers(true);
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardAll'));
+      assertOk(await vscode.commands.executeCommand('clause.discardAll'));
 
       assert.deepEqual(asked, [{ message: 'Discard pending changes in 1 file?', detail: '1 change will be reverted.' }]);
     });
@@ -117,7 +117,7 @@ describe('Keep All and Discard All', () => {
       // Declined, so that the question is all this test asks of the trash.
       const asked = confirmationAnswers(false);
 
-      await vscode.commands.executeCommand('claudePending.discardAll');
+      await vscode.commands.executeCommand('clause.discardAll');
 
       assert.deepEqual(asked, [
         { message: 'Discard pending changes in 2 files?', detail: '3 changes will be reverted. 1 file Claude created will be moved to the trash.' },
@@ -129,7 +129,7 @@ describe('Keep All and Discard All', () => {
       const asked = confirmationAnswers(false);
       const logged = store().logSize();
 
-      const result = await vscode.commands.executeCommand<Outcome | undefined>('claudePending.discardAll');
+      const result = await vscode.commands.executeCommand<Outcome | undefined>('clause.discardAll');
 
       assert.equal(result, undefined);
       assert.equal(asked.length, 1);
@@ -147,8 +147,8 @@ describe('Keep All and Discard All', () => {
       await waitFor('the file to be pending', () => api.model.files().length === 1);
       const asked = confirmationAnswers(true);
 
-      assert.equal(await vscode.commands.executeCommand('claudePending.keepAll'), undefined);
-      assert.equal(await vscode.commands.executeCommand('claudePending.discardAll'), undefined);
+      assert.equal(await vscode.commands.executeCommand('clause.keepAll'), undefined);
+      assert.equal(await vscode.commands.executeCommand('clause.discardAll'), undefined);
 
       assert.deepEqual(asked, []);
       assert.equal(read(outside), 'O\n');
@@ -158,8 +158,8 @@ describe('Keep All and Discard All', () => {
     it('does nothing, and does not ask, when nothing is pending anywhere', async () => {
       const asked = confirmationAnswers(true);
 
-      assert.equal(await vscode.commands.executeCommand('claudePending.keepAll'), undefined);
-      assert.equal(await vscode.commands.executeCommand('claudePending.discardAll'), undefined);
+      assert.equal(await vscode.commands.executeCommand('clause.keepAll'), undefined);
+      assert.equal(await vscode.commands.executeCommand('clause.discardAll'), undefined);
 
       assert.deepEqual(asked, []);
     });
@@ -172,7 +172,7 @@ describe('Keep All and Discard All', () => {
 
     const result = await api.model.discardFiles([unknown, store().idFor(path)]);
 
-    assert.deepEqual(result, { ok: false, reason: `${unknown}: Claude is no longer tracking this file.` });
+    assert.deepEqual(result, { ok: false, reason: `${unknown}: Clause is no longer tracking this file.` });
     assert.equal(read(path), 'a\n');
     assert.equal(hasEntry(path), false);
   });

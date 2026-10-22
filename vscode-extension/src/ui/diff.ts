@@ -2,7 +2,7 @@ import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import type { PendingFile, PendingModel } from '../pending.ts';
 
-export const BASELINE_SCHEME = 'claude-pending';
+export const BASELINE_SCHEME = 'clause';
 
 /**
  * A document holding the file as it was before Claude, for the left side of

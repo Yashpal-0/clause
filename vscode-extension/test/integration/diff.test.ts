@@ -44,7 +44,7 @@ describe('Open diff', () => {
       seedEdited('a.txt', BEFORE, AFTER);
       const file = await onlyPendingFile(api);
 
-      assertOk(await vscode.commands.executeCommand('claudePending.openDiff', fileTarget(file)));
+      assertOk(await vscode.commands.executeCommand('clause.openDiff', fileTarget(file)));
 
       const diff = await shownDiff();
       assert.equal(diff.original.scheme, BASELINE_SCHEME);
@@ -57,7 +57,7 @@ describe('Open diff', () => {
     it('reads the left side as the baseline', async () => {
       seedEdited('a.txt', BEFORE, AFTER);
       const file = await onlyPendingFile(api);
-      await vscode.commands.executeCommand('claudePending.openDiff', fileTarget(file));
+      await vscode.commands.executeCommand('clause.openDiff', fileTarget(file));
 
       const before = await vscode.workspace.openTextDocument((await shownDiff()).original);
 
@@ -67,10 +67,10 @@ describe('Open diff', () => {
     it('moves the left side along when a block is kept', async () => {
       seedEdited('a.txt', BEFORE, AFTER);
       const file = await onlyPendingFile(api);
-      await vscode.commands.executeCommand('claudePending.openDiff', fileTarget(file));
+      await vscode.commands.executeCommand('clause.openDiff', fileTarget(file));
       const before = await vscode.workspace.openTextDocument((await shownDiff()).original);
 
-      assertOk(await vscode.commands.executeCommand('claudePending.keepBlock', blockTarget(file, 0)));
+      assertOk(await vscode.commands.executeCommand('clause.keepBlock', blockTarget(file, 0)));
 
       await waitFor('the left side to take in the kept block', () => before.getText() === 'one\nTWO\nthree\nfour\n');
     });
@@ -81,7 +81,7 @@ describe('Open diff', () => {
       seedCreated('new.txt', 'hello\n');
       const file = await onlyPendingFile(api);
 
-      await vscode.commands.executeCommand('claudePending.openDiff', fileTarget(file));
+      await vscode.commands.executeCommand('clause.openDiff', fileTarget(file));
 
       const diff = await shownDiff();
       assert.equal(diff.original.scheme, BASELINE_SCHEME);
@@ -95,7 +95,7 @@ describe('Open diff', () => {
     it('has the file as it was before Claude on the left and nothing on the right', async () => {
       const file = await seedDeleted();
 
-      await vscode.commands.executeCommand('claudePending.openDiff', fileTarget(file));
+      await vscode.commands.executeCommand('clause.openDiff', fileTarget(file));
 
       const diff = await shownDiff();
       assert.equal(diff.original.query, file.id);
@@ -108,7 +108,7 @@ describe('Open diff', () => {
     it('is what revealing the file shows, since there is no file to open', async () => {
       const file = await seedDeleted();
 
-      await vscode.commands.executeCommand('claudePending.reveal', fileTarget(file));
+      await vscode.commands.executeCommand('clause.reveal', fileTarget(file));
 
       assert.equal((await shownDiff()).original.query, file.id);
     });
@@ -119,7 +119,7 @@ describe('Open diff', () => {
       seedEdited('latin1.txt', LATIN1_BEFORE, LATIN1_AFTER);
       const file = await onlyPendingFile(api);
 
-      await vscode.commands.executeCommand('claudePending.openDiff', fileTarget(file));
+      await vscode.commands.executeCommand('clause.openDiff', fileTarget(file));
 
       assert.deepEqual(diffTabs(), []);
     });

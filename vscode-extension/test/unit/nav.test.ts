@@ -104,9 +104,9 @@ test('block labels say how many lines were added, removed or replaced', () => {
 });
 
 test('the status text counts pending changes and the files they are in', () => {
-  assert.equal(statusText(7, 3), 'Claude: 7 pending · 3 files');
-  assert.equal(statusText(1, 1), 'Claude: 1 pending · 1 file');
-  assert.equal(statusText(2, 1), 'Claude: 2 pending · 1 file');
+  assert.equal(statusText(7, 3), 'Clause: 7 pending · 3 files');
+  assert.equal(statusText(1, 1), 'Clause: 1 pending · 1 file');
+  assert.equal(statusText(2, 1), 'Clause: 2 pending · 1 file');
 });
 
 test('a block is found again only by all four of its coordinates', () => {

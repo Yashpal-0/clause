@@ -35,13 +35,13 @@ describe('moving between blocks', () => {
   it('goes to the next block, and from the last one round to the first', async () => {
     const editor = await openChanged();
 
-    assert.deepEqual(await stops(editor, 'claudePending.nextBlock', 3), [1, 4, 1]);
+    assert.deepEqual(await stops(editor, 'clause.nextBlock', 3), [1, 4, 1]);
   });
 
   it('goes to the previous block, and from the first one round to the last', async () => {
     const editor = await openChanged();
 
-    assert.deepEqual(await stops(editor, 'claudePending.previousBlock', 3), [4, 1, 4]);
+    assert.deepEqual(await stops(editor, 'clause.previousBlock', 3), [4, 1, 4]);
   });
 
   it('does nothing in a file Claude has not changed', async () => {
@@ -50,8 +50,8 @@ describe('moving between blocks', () => {
     const editor = await open(path);
     editor.selection = new vscode.Selection(2, 0, 2, 0);
 
-    await vscode.commands.executeCommand('claudePending.nextBlock');
-    await vscode.commands.executeCommand('claudePending.previousBlock');
+    await vscode.commands.executeCommand('clause.nextBlock');
+    await vscode.commands.executeCommand('clause.previousBlock');
 
     assert.equal(editor.selection.active.line, 2);
   });
@@ -69,7 +69,7 @@ describe('revealing a pending change', () => {
     const path = seedEdited('a.txt', BEFORE, AFTER);
     const file = await onlyPendingFile(api);
 
-    await vscode.commands.executeCommand('claudePending.reveal', blockTarget(file, 1));
+    await vscode.commands.executeCommand('clause.reveal', blockTarget(file, 1));
 
     await waitFor('the cursor to reach the block', () => vscode.window.activeTextEditor?.selection.active.line === 4);
     assert.equal(vscode.window.activeTextEditor?.document.uri.toString(), vscode.Uri.file(path).toString());
@@ -79,7 +79,7 @@ describe('revealing a pending change', () => {
     const path = seedEdited('a.txt', BEFORE, AFTER);
     const file = await onlyPendingFile(api);
 
-    await vscode.commands.executeCommand('claudePending.reveal', fileTarget(file));
+    await vscode.commands.executeCommand('clause.reveal', fileTarget(file));
 
     await waitFor('the file to open', () => vscode.window.activeTextEditor?.document.uri.toString() === vscode.Uri.file(path).toString());
   });
@@ -88,9 +88,9 @@ describe('revealing a pending change', () => {
     seedEdited('a.txt', BEFORE, AFTER);
     await onlyPendingFile(api);
 
-    await vscode.commands.executeCommand('claudePending.reveal', { kind: 'group' });
-    await vscode.commands.executeCommand('claudePending.reveal', { kind: 'file', id: '0'.repeat(64) });
-    await vscode.commands.executeCommand('claudePending.reveal', 'a.txt');
+    await vscode.commands.executeCommand('clause.reveal', { kind: 'group' });
+    await vscode.commands.executeCommand('clause.reveal', { kind: 'file', id: '0'.repeat(64) });
+    await vscode.commands.executeCommand('clause.reveal', 'a.txt');
 
     assert.equal(vscode.window.tabGroups.all.flatMap((group) => group.tabs).length, 0, 'nothing was opened');
   });

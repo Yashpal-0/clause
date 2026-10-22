@@ -53,7 +53,7 @@ const ENTRY_ID = /^[0-9a-f]{1,64}$/;
 const ok: OpResult = { ok: true };
 const refuse = (reason: string): OpResult => ({ ok: false, reason });
 const CHANGED = refuse('The file changed since it was shown, so nothing was changed. Try again.');
-const GONE = refuse('Claude is no longer tracking this file.');
+const GONE = refuse('Clause is no longer tracking this file.');
 
 interface Tracked {
   readonly id: string;
