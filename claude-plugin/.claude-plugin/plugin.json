@@ -1,0 +1,8 @@
+{
+  "name": "pending-edits",
+  "description": "Keeps every edit Claude makes pending until you Keep or Discard it in VS Code or Cursor.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Yashpal-0"
+  }
+}
