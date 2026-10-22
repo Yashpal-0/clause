@@ -6,7 +6,7 @@
   },
   "plugins": [
     {
-      "name": "pending-edits",
+      "name": "clause",
       "source": "./claude-plugin",
       "description": "Keeps every edit Claude makes pending until you Keep or Discard it in VS Code or Cursor."
     }

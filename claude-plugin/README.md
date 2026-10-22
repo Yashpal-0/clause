@@ -13,7 +13,7 @@ Without that extension the plugin only records baselines and shows nothing.
 
 ```sh
 claude plugin marketplace add Yashpal-0/clause
-claude plugin install pending-edits@clause --scope user
+claude plugin install clause@clause --scope user
 ```
 
 Then start a new Claude Code session, or run `/reload-plugins` in a running one. Node.js must be on
@@ -56,7 +56,7 @@ permissions.
 ## Uninstall
 
 ```sh
-claude plugin uninstall pending-edits@clause
+claude plugin uninstall clause@clause
 claude plugin marketplace remove clause
 ```
 
