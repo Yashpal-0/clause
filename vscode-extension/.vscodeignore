@@ -1,0 +1,6 @@
+# The extension is one esbuild bundle that inlines its dependencies and claude-plugin/store.mjs,
+# so the package needs only the manifest and the bundle. Naming what to keep means a new folder
+# (tests, scratch output, source maps) cannot end up in the package by accident.
+**
+!package.json
+!dist/extension.js

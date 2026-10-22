@@ -1,0 +1,7 @@
+node_modules/
+.superpowers/
+*.vsix
+out/
+dist/
+.vscode-test/
+.claude/

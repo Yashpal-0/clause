@@ -1,0 +1,15 @@
+{
+  "name": "claude-pending-edits",
+  "private": true,
+  "description": "Dev tooling for the pending-edits Claude Code plugin. The shipped plugin lives in claude-plugin/ and has no dependencies.",
+  "scripts": {
+    "test:plugin": "node --test \"claude-plugin/test/*.test.mjs\"",
+    "typecheck:plugin": "tsc -p tsconfig.plugin.json",
+    "test": "npm run typecheck:plugin && npm run test:plugin"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "diff": "^9.0.0",
+    "typescript": "^5.9.0"
+  }
+}

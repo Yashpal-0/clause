@@ -1,0 +1,498 @@
+{
+  "name": "claude-pending-edits",
+  "displayName": "Clause",
+  "description": "Keep or Discard every edit Claude Code makes, per block, per file or all at once, across prompts and restarts.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "build": "node esbuild.mjs",
+    "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/unit/*.test.ts\"",
+    "test:integration": "node esbuild.mjs --tests && xvfb-run -a vscode-test",
+    "test": "npm run typecheck && npm run test:unit"
+  },
+  "dependencies": {
+    "diff": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.0.0",
+    "@types/vscode": "1.100.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "mocha": "^12.0.3",
+    "typescript": "^5.9.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "enabledApiProposals": [
+    "editorInsets"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudePending.keepBlock",
+        "title": "Keep Block",
+        "category": "Claude Pending",
+        "icon": "$(check)"
+      },
+      {
+        "command": "claudePending.discardBlock",
+        "title": "Discard Block",
+        "category": "Claude Pending",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "claudePending.keepSelection",
+        "title": "Keep Selected Lines"
+      },
+      {
+        "command": "claudePending.keepFile",
+        "title": "Keep File",
+        "category": "Claude Pending",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "claudePending.discardFile",
+        "title": "Discard File",
+        "category": "Claude Pending",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "claudePending.keepAll",
+        "title": "Keep All",
+        "category": "Claude Pending",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "claudePending.discardAll",
+        "title": "Discard All",
+        "category": "Claude Pending",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "claudePending.openDiff",
+        "title": "Open Diff",
+        "category": "Claude Pending",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "claudePending.nextBlock",
+        "title": "Go to Next Block",
+        "category": "Claude Pending",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "claudePending.previousBlock",
+        "title": "Go to Previous Block",
+        "category": "Claude Pending",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "claudePending.nextFile",
+        "title": "Review Next File",
+        "category": "Claude Pending",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "claudePending.previousFile",
+        "title": "Review Previous File",
+        "category": "Claude Pending",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "claudePending.reveal",
+        "title": "Show",
+        "category": "Claude Pending"
+      },
+      {
+        "command": "claudePending.refresh",
+        "title": "Refresh",
+        "category": "Claude Pending",
+        "icon": "$(refresh)"
+      }
+    ],
+    "views": {
+      "scm": [
+        {
+          "id": "claudePending",
+          "name": "Clause",
+          "when": "claudePending.hasPending"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "claudePending.keepAll",
+          "when": "view == claudePending",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudePending.discardAll",
+          "when": "view == claudePending",
+          "group": "navigation@2"
+        },
+        {
+          "command": "claudePending.refresh",
+          "when": "view == claudePending",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "claudePending.keepBlock",
+          "when": "view == claudePending && viewItem == block",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudePending.discardBlock",
+          "when": "view == claudePending && viewItem == block",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudePending.keepFile",
+          "when": "view == claudePending && viewItem == file",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudePending.discardFile",
+          "when": "view == claudePending && viewItem == file",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudePending.openDiff",
+          "when": "view == claudePending && viewItem == file",
+          "group": "inline@3"
+        },
+        {
+          "command": "claudePending.keepAll",
+          "when": "view == claudePending && viewItem == group",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudePending.discardAll",
+          "when": "view == claudePending && viewItem == group",
+          "group": "inline@2"
+        },
+        {
+          "command": "claudePending.keepBlock",
+          "when": "view == claudePending && viewItem == block",
+          "group": "1_review@1"
+        },
+        {
+          "command": "claudePending.discardBlock",
+          "when": "view == claudePending && viewItem == block",
+          "group": "1_review@2"
+        },
+        {
+          "command": "claudePending.keepFile",
+          "when": "view == claudePending && viewItem == file",
+          "group": "1_review@1"
+        },
+        {
+          "command": "claudePending.discardFile",
+          "when": "view == claudePending && viewItem == file",
+          "group": "1_review@2"
+        },
+        {
+          "command": "claudePending.openDiff",
+          "when": "view == claudePending && viewItem == file",
+          "group": "1_review@3"
+        },
+        {
+          "command": "claudePending.keepAll",
+          "when": "view == claudePending && viewItem == group",
+          "group": "1_review@1"
+        },
+        {
+          "command": "claudePending.discardAll",
+          "when": "view == claudePending && viewItem == group",
+          "group": "1_review@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "claudePending.previousBlock",
+          "when": "claudePending.fileHasPending",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudePending.nextBlock",
+          "when": "claudePending.fileHasPending",
+          "group": "navigation@2"
+        },
+        {
+          "command": "claudePending.keepFile",
+          "when": "claudePending.fileHasPending",
+          "group": "navigation@3"
+        },
+        {
+          "command": "claudePending.discardFile",
+          "when": "claudePending.fileHasPending",
+          "group": "navigation@4"
+        },
+        {
+          "command": "claudePending.openDiff",
+          "when": "claudePending.fileHasPending",
+          "group": "navigation@5"
+        },
+        {
+          "command": "claudePending.previousFile",
+          "when": "claudePending.hasPending",
+          "group": "navigation@6"
+        },
+        {
+          "command": "claudePending.nextFile",
+          "when": "claudePending.hasPending",
+          "group": "navigation@7"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "claudePending.keepBlock",
+          "when": "claudePending.inBlock",
+          "group": "claudePending@1"
+        },
+        {
+          "command": "claudePending.discardBlock",
+          "when": "claudePending.inBlock",
+          "group": "claudePending@2"
+        },
+        {
+          "command": "claudePending.keepSelection",
+          "when": "claudePending.selectionInPending",
+          "group": "claudePending@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "claudePending.reveal",
+          "when": "false"
+        },
+        {
+          "command": "claudePending.keepBlock",
+          "when": "claudePending.inBlock"
+        },
+        {
+          "command": "claudePending.discardBlock",
+          "when": "claudePending.inBlock"
+        },
+        {
+          "command": "claudePending.keepSelection",
+          "when": "claudePending.selectionInPending"
+        },
+        {
+          "command": "claudePending.keepFile",
+          "when": "claudePending.fileHasPending"
+        },
+        {
+          "command": "claudePending.discardFile",
+          "when": "claudePending.fileHasPending"
+        },
+        {
+          "command": "claudePending.openDiff",
+          "when": "claudePending.fileHasPending"
+        },
+        {
+          "command": "claudePending.nextBlock",
+          "when": "claudePending.fileHasPending"
+        },
+        {
+          "command": "claudePending.previousBlock",
+          "when": "claudePending.fileHasPending"
+        },
+        {
+          "command": "claudePending.keepAll",
+          "when": "claudePending.hasPending"
+        },
+        {
+          "command": "claudePending.discardAll",
+          "when": "claudePending.hasPending"
+        },
+        {
+          "command": "claudePending.nextFile",
+          "when": "claudePending.hasPending"
+        },
+        {
+          "command": "claudePending.previousFile",
+          "when": "claudePending.hasPending"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "claudePending.keepBlock",
+        "key": "ctrl+y",
+        "when": "editorTextFocus && claudePending.inBlock && !claudePending.selectionInPending"
+      },
+      {
+        "command": "claudePending.keepSelection",
+        "key": "ctrl+y",
+        "when": "editorTextFocus && claudePending.selectionInPending"
+      },
+      {
+        "command": "claudePending.discardBlock",
+        "key": "ctrl+n",
+        "when": "editorTextFocus && claudePending.inBlock"
+      },
+      {
+        "command": "claudePending.keepFile",
+        "key": "ctrl+alt+c shift+k",
+        "when": "editorTextFocus && claudePending.fileHasPending"
+      },
+      {
+        "command": "claudePending.discardFile",
+        "key": "ctrl+alt+c shift+d",
+        "when": "editorTextFocus && claudePending.fileHasPending"
+      },
+      {
+        "command": "claudePending.nextBlock",
+        "key": "ctrl+alt+c n",
+        "when": "editorTextFocus && claudePending.fileHasPending"
+      },
+      {
+        "command": "claudePending.previousBlock",
+        "key": "ctrl+alt+c p",
+        "when": "editorTextFocus && claudePending.fileHasPending"
+      },
+      {
+        "command": "claudePending.nextBlock",
+        "key": "alt+j",
+        "when": "editorTextFocus && claudePending.fileHasPending"
+      },
+      {
+        "command": "claudePending.previousBlock",
+        "key": "alt+k",
+        "when": "editorTextFocus && claudePending.fileHasPending"
+      },
+      {
+        "command": "claudePending.nextFile",
+        "key": "alt+l",
+        "when": "editorTextFocus && claudePending.hasPending"
+      },
+      {
+        "command": "claudePending.previousFile",
+        "key": "alt+h",
+        "when": "editorTextFocus && claudePending.hasPending"
+      },
+      {
+        "command": "claudePending.nextFile",
+        "key": "ctrl+alt+c f",
+        "when": "editorTextFocus && claudePending.hasPending"
+      },
+      {
+        "command": "claudePending.previousFile",
+        "key": "ctrl+alt+c shift+f",
+        "when": "editorTextFocus && claudePending.hasPending"
+      }
+    ],
+    "configuration": {
+      "title": "Clause",
+      "properties": {
+        "claudePending.followEdits": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the file Claude has just edited, at the changed block, as a preview tab. Keyboard focus stays where it is, and nothing opens while you are typing or for files outside this window's folders."
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "claudePending.addedBackground",
+        "description": "Background of lines Claude added or rewrote that have not been kept or discarded.",
+        "defaults": {
+          "dark": "#388d5b40",
+          "light": "#2ea04326",
+          "highContrast": "#2ea04355",
+          "highContrastLight": "#2ea04326"
+        }
+      },
+      {
+        "id": "claudePending.addedRuler",
+        "description": "Overview ruler mark for lines Claude added or rewrote.",
+        "defaults": {
+          "dark": "#2ea043",
+          "light": "#1a7f37",
+          "highContrast": "#2ea043",
+          "highContrastLight": "#1a7f37"
+        }
+      },
+      {
+        "id": "claudePending.removedBackground",
+        "description": "Background of the rows that show lines Claude removed.",
+        "defaults": {
+          "dark": "#98044040",
+          "light": "#cf222e26",
+          "highContrast": "#f8514955",
+          "highContrastLight": "#cf222e26"
+        }
+      },
+      {
+        "id": "claudePending.keepBackground",
+        "description": "Background of the Keep button on the bar of a block Claude changed.",
+        "defaults": {
+          "dark": "#388d5b",
+          "light": "#1a7f37",
+          "highContrast": "#3fb950",
+          "highContrastLight": "#1a7f37"
+        }
+      },
+      {
+        "id": "claudePending.keepForeground",
+        "description": "Text of the Keep button on the bar of a block Claude changed.",
+        "defaults": {
+          "dark": "#101010",
+          "light": "#ffffff",
+          "highContrast": "#000000",
+          "highContrastLight": "#ffffff"
+        }
+      },
+      {
+        "id": "claudePending.removedBorder",
+        "description": "Rule drawn where Claude removed lines, and its overview ruler mark.",
+        "defaults": {
+          "dark": "#f85149",
+          "light": "#cf222e",
+          "highContrast": "#f85149",
+          "highContrastLight": "#cf222e"
+        }
+      },
+      {
+        "id": "claudePending.removedForeground",
+        "description": "Text of the note shown where Claude removed lines.",
+        "defaults": {
+          "dark": "#f85149",
+          "light": "#cf222e",
+          "highContrast": "#f85149",
+          "highContrastLight": "#cf222e"
+        }
+      },
+      {
+        "id": "claudePending.explorerForeground",
+        "description": "Colour of the mark on files, in the file tree and on their tabs, that have changes waiting for Keep or Discard.",
+        "defaults": {
+          "dark": "charts.purple",
+          "light": "charts.purple",
+          "highContrast": "charts.purple",
+          "highContrastLight": "charts.purple"
+        }
+      }
+    ]
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "categories": [
+    "Other"
+  ]
+}

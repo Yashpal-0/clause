@@ -1,0 +1,14 @@
+{
+  "name": "claude-pending-edits",
+  "description": "Cursor-style Keep/Discard review for the edits Claude Code makes.",
+  "owner": {
+    "name": "Yashpal-0"
+  },
+  "plugins": [
+    {
+      "name": "pending-edits",
+      "source": "./claude-plugin",
+      "description": "Keeps every edit Claude makes pending until you Keep or Discard it in VS Code or Cursor."
+    }
+  ]
+}
