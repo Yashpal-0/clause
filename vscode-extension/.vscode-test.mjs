@@ -21,7 +21,7 @@ const scratch = (name) => {
 };
 // A seeded entry looks to the extension like Claude editing the file after the window opened, and the
 // extension would open every one of them in an editor. Only follow.test.ts wants that, and turns it on.
-const userSettings = `${JSON.stringify({ 'claudePending.followEdits': false }, null, 2)}\n`;
+const userSettings = `${JSON.stringify({ 'clause.followEdits': false }, null, 2)}\n`;
 const userData = (scratchKey) => {
   const directory = scratch(`user-data-${scratchKey}`);
   mkdirSync(join(directory, 'User'), { recursive: true });
@@ -56,7 +56,7 @@ export default defineConfig([
   // The editor as most users have it: the extension has not been allowed to use the editorInsets proposal.
   run('default', 'out/test/integration/*.test.js'),
   // The editor as the README sets it up. Only the editor's own flag can allow a proposal; the manifest cannot.
-  run('proposed', 'out/test/integration/proposed/*.test.js', { extraArguments: ['--enable-proposed-api', 'local.claude-pending-edits'] }),
+  run('proposed', 'out/test/integration/proposed/*.test.js', { extraArguments: ['--enable-proposed-api', 'local.clause'] }),
   // The editor closed with changes still pending, then opened again. These two must run in this order and in
   // one `vscode-test` invocation: starting an invocation wipes the scratch directories.
   run('restart-seed', 'out/test/integration/restart/seed.test.js', { scratchKey: 'restart' }),

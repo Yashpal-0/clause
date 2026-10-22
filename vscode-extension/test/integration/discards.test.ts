@@ -28,9 +28,9 @@ describe('the log of what was discarded', () => {
     seedEdited('a.txt', BEFORE, AFTER);
     const file = await onlyPendingFile(api);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(file, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(file, 0)));
     await waitFor('the added block to be the only one left', () => pendingAt(api, file.path)?.state.blocks.length === 1);
-    assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(pendingAt(api, file.path)!, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(pendingAt(api, file.path)!, 0)));
 
     assert.deepEqual(scopes(), [
       ['block', 'Changed 1 line at line 2'],
@@ -46,7 +46,7 @@ describe('the log of what was discarded', () => {
     seedEdited('a.txt', BEFORE, AFTER);
     const file = await onlyPendingFile(api);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(file)));
+    assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(file)));
 
     assert.deepEqual(scopes(), [['file', undefined]]);
     assert.equal(records()[0]!.path, file.path);
@@ -57,7 +57,7 @@ describe('the log of what was discarded', () => {
     const file = await onlyPendingFile(api);
     await open(path);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(file, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(file, 0)));
 
     assert.deepEqual(scopes(), [['block', 'Changed 1 line at line 2']]);
   });
@@ -67,7 +67,7 @@ describe('the log of what was discarded', () => {
     seedCreated('new.txt', 'hello\n');
     const file = await onlyPendingFile(api);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(file)));
+    assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(file)));
 
     assert.deepEqual(scopes(), [['file', undefined]]);
     assert.equal(records()[0]!.path, file.path);
@@ -79,7 +79,7 @@ describe('the log of what was discarded', () => {
     await waitFor('the two files to be pending', () => api.model.files().length === 2);
     const paths = api.model.files().map((file) => file.path);
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardAll'));
+    assertOk(await vscode.commands.executeCommand('clause.discardAll'));
 
     assert.deepEqual(scopes(), [
       ['file', undefined],
@@ -94,8 +94,8 @@ describe('the log of what was discarded', () => {
     await waitFor('the two files to be pending', () => api.model.files().length === 2);
     const [first, second] = api.model.files();
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepBlock', blockTarget(first!, 0)));
-    assertOk(await vscode.commands.executeCommand('claudePending.keepFile', fileTarget(second!)));
+    assertOk(await vscode.commands.executeCommand('clause.keepBlock', blockTarget(first!, 0)));
+    assertOk(await vscode.commands.executeCommand('clause.keepFile', fileTarget(second!)));
 
     assert.deepEqual(records(), []);
   });
@@ -106,7 +106,7 @@ describe('the log of what was discarded', () => {
     // A block that is not one of the file's, as one shown before the file changed would be.
     const stale = { kind: 'block', id: file.id, block: { kind: 'changed', baseStart: 0, baseEnd: 1, curStart: 0, curEnd: 1 } };
 
-    const result = await vscode.commands.executeCommand<{ ok: boolean }>('claudePending.discardBlock', stale);
+    const result = await vscode.commands.executeCommand<{ ok: boolean }>('clause.discardBlock', stale);
 
     assert.equal(result.ok, false);
     assert.deepEqual(records(), []);

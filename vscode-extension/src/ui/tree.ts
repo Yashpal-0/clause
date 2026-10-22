@@ -80,7 +80,7 @@ function fileItem(file: PendingFile, node: FileTarget): vscode.TreeItem {
     .join(' · ');
   item.tooltip = file.path;
   item.contextValue = 'file';
-  item.command = { command: 'claudePending.reveal', title: 'Show', arguments: [node] };
+  item.command = { command: 'clause.reveal', title: 'Show', arguments: [node] };
   return item;
 }
 
@@ -93,6 +93,6 @@ function blockItem(file: PendingFile, node: BlockTarget): vscode.TreeItem {
   item.description = `line ${anchorLine(block, file.state.cur?.lines.length ?? 1) + 1}`;
   item.iconPath = new vscode.ThemeIcon(BLOCK_ICONS[block.kind]);
   item.contextValue = 'block';
-  item.command = { command: 'claudePending.reveal', title: 'Show', arguments: [node] };
+  item.command = { command: 'clause.reveal', title: 'Show', arguments: [node] };
   return item;
 }

@@ -170,8 +170,8 @@ test('the bar stops short of the editor scrollbar, which is drawn over the right
 test('every extension colour the page asks for is one the manifest defines', () => {
   const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { contributes: { colors: { id: string }[] } };
   const defined = manifest.contributes.colors.map(({ id }) => id);
-  const asked = [...new Set([...page().matchAll(/--vscode-claudePending-(\w+)/g)].map(([, name]) => `claudePending.${name}`))];
-  assert.ok(asked.includes('claudePending.addedBackground'), 'the bar under added lines is tinted like them');
+  const asked = [...new Set([...page().matchAll(/--vscode-clause-(\w+)/g)].map(([, name]) => `clause.${name}`))];
+  assert.ok(asked.includes('clause.addedBackground'), 'the bar under added lines is tinted like them');
   for (const id of asked) assert.ok(defined.includes(id), `${id} is defined in the manifest`);
 });
 
@@ -195,9 +195,9 @@ test('the labels shown on the bar are the keys the manifest binds', () => {
   const label = (key: string) => key.split('+').map((part) => part[0]!.toUpperCase() + part.slice(1)).join('+');
   const bound = (command: string) => manifest.contributes.keybindings.filter((binding) => binding.command === command);
 
-  assert.deepEqual(bound('claudePending.keepBlock').map(({ key }) => label(key)), [BAR_LABELS.keepKey]);
-  assert.deepEqual(bound('claudePending.discardBlock').map(({ key }) => label(key)), [BAR_LABELS.discardKey]);
-  for (const command of ['claudePending.keepBlock', 'claudePending.discardBlock']) {
-    assert.ok(bound(command)[0]!.when.includes('claudePending.inBlock'), `${command} only fires inside a block`);
+  assert.deepEqual(bound('clause.keepBlock').map(({ key }) => label(key)), [BAR_LABELS.keepKey]);
+  assert.deepEqual(bound('clause.discardBlock').map(({ key }) => label(key)), [BAR_LABELS.discardKey]);
+  for (const command of ['clause.keepBlock', 'clause.discardBlock']) {
+    assert.ok(bound(command)[0]!.when.includes('clause.inBlock'), `${command} only fires inside a block`);
   }
 });

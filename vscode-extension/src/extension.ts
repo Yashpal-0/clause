@@ -35,7 +35,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const decorations = new Decorations(model, insets);
   const lenses = new PendingCodeLenses(model, insets);
   const tree = new PendingTree(model);
-  const view = vscode.window.createTreeView('claudePending', { treeDataProvider: tree, showCollapseAll: true });
+  const view = vscode.window.createTreeView('clause', { treeDataProvider: tree, showCollapseAll: true });
   const summary = new Summary(model, view);
   const baselines = new BaselineContent(model);
   const follow = new Follow(model, (message) => output.appendLine(message));

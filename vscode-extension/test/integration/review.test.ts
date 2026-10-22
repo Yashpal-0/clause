@@ -40,18 +40,18 @@ describe('reviewing a file Claude changed', () => {
     const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', vscode.Uri.file(path));
     const lensesFor = (command: string) => lenses.filter((lens) => lens.command?.command === command);
     assert.deepEqual(
-      lensesFor('claudePending.keepBlock').map((lens) => lens.range.start.line),
+      lensesFor('clause.keepBlock').map((lens) => lens.range.start.line),
       [1, 4],
     );
-    assert.equal(lensesFor('claudePending.discardBlock').length, 2);
-    assert.equal(lensesFor('claudePending.openDiff').length, 2);
+    assert.equal(lensesFor('clause.discardBlock').length, 2);
+    assert.equal(lensesFor('clause.openDiff').length, 2);
   });
 
   it('keeping a block makes it part of the baseline and leaves the file as it is', async () => {
     const path = seedEdited('a.txt', BEFORE, AFTER);
     const file = await pendingFile();
 
-    const result = await vscode.commands.executeCommand('claudePending.keepBlock', { kind: 'block', id: file.id, block: file.state.blocks[0] });
+    const result = await vscode.commands.executeCommand('clause.keepBlock', { kind: 'block', id: file.id, block: file.state.blocks[0] });
 
     assert.deepEqual(result, { ok: true });
     assert.equal(storedBaseline(path), 'one\nTWO\nthree\nfour\n');
@@ -66,7 +66,7 @@ describe('reviewing a file Claude changed', () => {
     const path = seedEdited('a.txt', BEFORE, AFTER);
     const file = await pendingFile();
 
-    const result = await vscode.commands.executeCommand('claudePending.discardBlock', { kind: 'block', id: file.id, block: file.state.blocks[1] });
+    const result = await vscode.commands.executeCommand('clause.discardBlock', { kind: 'block', id: file.id, block: file.state.blocks[1] });
 
     assert.deepEqual(result, { ok: true });
     assert.equal(read(path), 'one\nTWO\nthree\nfour\n');
@@ -81,7 +81,7 @@ describe('reviewing a file Claude changed', () => {
     const path = seedEdited('a.txt', 'a\nb\n', 'a\nB\n');
     const file = await pendingFile();
 
-    assertOk(await vscode.commands.executeCommand('claudePending.keepBlock', { kind: 'block', id: file.id, block: file.state.blocks[0] }));
+    assertOk(await vscode.commands.executeCommand('clause.keepBlock', { kind: 'block', id: file.id, block: file.state.blocks[0] }));
 
     assert.equal(hasEntry(path), false);
     assert.equal(read(path), 'a\nB\n');
@@ -92,7 +92,7 @@ describe('reviewing a file Claude changed', () => {
     const path = seedEdited('a.txt', 'a\nb\n', 'a\nB\n');
     const file = await pendingFile();
 
-    assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', { kind: 'block', id: file.id, block: file.state.blocks[0] }));
+    assertOk(await vscode.commands.executeCommand('clause.discardBlock', { kind: 'block', id: file.id, block: file.state.blocks[0] }));
 
     assert.equal(read(path), 'a\nb\n');
     assert.equal(hasEntry(path), false);
@@ -103,7 +103,7 @@ describe('reviewing a file Claude changed', () => {
     const path = seedEdited('a.txt', BEFORE, AFTER);
     const file = await pendingFile();
 
-    const result = await vscode.commands.executeCommand('claudePending.keepFile', { kind: 'file', id: file.id });
+    const result = await vscode.commands.executeCommand('clause.keepFile', { kind: 'file', id: file.id });
 
     assert.deepEqual(result, { ok: true });
     assert.equal(read(path), AFTER);
@@ -114,7 +114,7 @@ describe('reviewing a file Claude changed', () => {
     const path = seedEdited('a.txt', BEFORE, AFTER);
     const file = await pendingFile();
 
-    const result = await vscode.commands.executeCommand('claudePending.discardFile', { kind: 'file', id: file.id });
+    const result = await vscode.commands.executeCommand('clause.discardFile', { kind: 'file', id: file.id });
 
     assert.deepEqual(result, { ok: true });
     assert.equal(read(path), BEFORE);
@@ -126,7 +126,7 @@ describe('reviewing a file Claude changed', () => {
     const file = await pendingFile();
     const stale = { ...file.state.blocks[0]!, curStart: 3, curEnd: 4 };
 
-    const result = await vscode.commands.executeCommand<{ ok: boolean }>('claudePending.discardBlock', { kind: 'block', id: file.id, block: stale });
+    const result = await vscode.commands.executeCommand<{ ok: boolean }>('clause.discardBlock', { kind: 'block', id: file.id, block: stale });
 
     assert.equal(result.ok, false);
     assert.equal(read(path), AFTER);
@@ -136,7 +136,7 @@ describe('reviewing a file Claude changed', () => {
   it('keeps and discards in files of another folder tree too', async () => {
     const path = seedEdited('sub/dir/b.txt', 'x\n', 'y\n');
     const file = await pendingFile();
-    assertOk(await vscode.commands.executeCommand('claudePending.discardFile', { kind: 'file', id: file.id }));
+    assertOk(await vscode.commands.executeCommand('clause.discardFile', { kind: 'file', id: file.id }));
     assert.equal(read(path), 'x\n');
     assert.match(path, /sub[\\/]dir[\\/]b\.txt$/);
   });

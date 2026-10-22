@@ -26,7 +26,7 @@ describe('a file with Windows line endings', () => {
     it('keeps its line endings when a changed block is discarded', async () => {
       const { path, file } = await seedPending();
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(file, 0)));
+      assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(file, 0)));
 
       assert.equal(read(path), 'one\r\ntwo\r\nthree\r\nfour\r\nfive\r\n');
     });
@@ -34,7 +34,7 @@ describe('a file with Windows line endings', () => {
     it('keeps its line endings when an added block is discarded', async () => {
       const { path, file } = await seedPending();
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(file, 1)));
+      assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(file, 1)));
 
       assert.equal(read(path), 'one\r\nTWO\r\nthree\r\nfour\r\n');
     });
@@ -42,7 +42,7 @@ describe('a file with Windows line endings', () => {
     it('is given back byte for byte when the whole file is discarded', async () => {
       const { path, file } = await seedPending();
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(file)));
+      assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(file)));
 
       assert.equal(read(path), BEFORE);
     });
@@ -59,7 +59,7 @@ describe('a file with Windows line endings', () => {
     it('keeps its line endings, in the editor and on disk, when a block is discarded', async () => {
       const { path, file, editor } = await openPending();
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardBlock', blockTarget(file, 0)));
+      assertOk(await vscode.commands.executeCommand('clause.discardBlock', blockTarget(file, 0)));
 
       assert.equal(editor.document.eol, vscode.EndOfLine.CRLF);
       assert.equal(editor.document.getText(), 'one\r\ntwo\r\nthree\r\nfour\r\nfive\r\n');
@@ -69,7 +69,7 @@ describe('a file with Windows line endings', () => {
     it('keeps its line endings, in the editor and on disk, when the whole file is discarded', async () => {
       const { path, file, editor } = await openPending();
 
-      assertOk(await vscode.commands.executeCommand('claudePending.discardFile', fileTarget(file)));
+      assertOk(await vscode.commands.executeCommand('clause.discardFile', fileTarget(file)));
 
       assert.equal(editor.document.eol, vscode.EndOfLine.CRLF);
       assert.equal(editor.document.getText(), BEFORE);

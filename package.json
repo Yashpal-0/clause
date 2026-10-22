@@ -1,5 +1,5 @@
 {
-  "name": "claude-pending-edits",
+  "name": "clause",
   "private": true,
   "description": "Dev tooling for the pending-edits Claude Code plugin. The shipped plugin lives in claude-plugin/ and has no dependencies.",
   "scripts": {

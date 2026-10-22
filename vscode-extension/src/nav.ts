@@ -114,7 +114,7 @@ export function blockLabel(block: Block): string {
 }
 
 export function statusText(pending: number, files: number): string {
-  return `Claude: ${pending} pending · ${files} ${files === 1 ? 'file' : 'files'}`;
+  return `Clause: ${pending} pending · ${files} ${files === 1 ? 'file' : 'files'}`;
 }
 
 /** What is waiting, the way Cursor counts a review: files first, then the changes in them. */

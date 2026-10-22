@@ -43,9 +43,9 @@ export class PendingCodeLenses implements vscode.CodeLensProvider, vscode.Dispos
       const pager =
         block !== undefined && plan.length > 1
           ? [
-              new vscode.CodeLens(range, { title: '$(arrow-up)', tooltip: 'Go to the previous change', command: 'claudePending.reveal', arguments: [neighbour(-1)] }),
+              new vscode.CodeLens(range, { title: '$(arrow-up)', tooltip: 'Go to the previous change', command: 'clause.reveal', arguments: [neighbour(-1)] }),
               new vscode.CodeLens(range, { title: counterText(index + 1, plan.length), command: '' }),
-              new vscode.CodeLens(range, { title: '$(arrow-down)', tooltip: 'Go to the next change', command: 'claudePending.reveal', arguments: [neighbour(1)] }),
+              new vscode.CodeLens(range, { title: '$(arrow-down)', tooltip: 'Go to the next change', command: 'clause.reveal', arguments: [neighbour(1)] }),
             ]
           : [];
       return [
@@ -55,16 +55,16 @@ export class PendingCodeLenses implements vscode.CodeLensProvider, vscode.Dispos
         new vscode.CodeLens(range, {
           title: `$(discard) ${BAR_LABELS.discard}${key(BAR_LABELS.discardKey)}`,
           tooltip: 'Discard this change: put the lines back the way they were before it',
-          command: `claudePending.discard${piece}`,
+          command: `clause.discard${piece}`,
           arguments: [target],
         }),
         new vscode.CodeLens(range, {
           title: `$(check) ${BAR_LABELS.keep}${key(BAR_LABELS.keepKey)}`,
           tooltip: 'Keep these changes: they become part of the file as far as this review goes',
-          command: `claudePending.keep${piece}`,
+          command: `clause.keep${piece}`,
           arguments: [target],
         }),
-        new vscode.CodeLens(range, { title: '$(diff) Diff', tooltip: 'Compare the file with how it was before Claude', command: 'claudePending.openDiff', arguments: [whole] }),
+        new vscode.CodeLens(range, { title: '$(diff) Diff', tooltip: 'Compare the file with how it was before Claude', command: 'clause.openDiff', arguments: [whole] }),
       ];
     });
   }

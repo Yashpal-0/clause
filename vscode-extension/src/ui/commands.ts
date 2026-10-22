@@ -17,7 +17,7 @@ export const realPrompts = (): Prompts => ({
 });
 
 /**
- * Registers the `claudePending.*` commands. Each takes the row, lens or
+ * Registers the `clause.*` commands. Each takes the row, lens or
  * resource it was invoked from, or acts on the active editor's cursor when it
  * is invoked without one (keybindings, the palette), and resolves to what the
  * model reported.
@@ -146,7 +146,7 @@ export function registerCommands(model: PendingModel, prompts: Prompts): vscode.
     if (next !== undefined) await openForReview(next);
   };
 
-  const register = (name: string, handler: (arg: unknown) => unknown) => vscode.commands.registerCommand(`claudePending.${name}`, handler);
+  const register = (name: string, handler: (arg: unknown) => unknown) => vscode.commands.registerCommand(`clause.${name}`, handler);
 
   return vscode.Disposable.from(
     register('keepBlock', (arg) => onBlock(arg, (id, block) => model.keepBlock(id, block))),
