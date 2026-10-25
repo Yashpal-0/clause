@@ -45,8 +45,8 @@ sign. Hence the name.
 2. The file it just touched opens at the change: Claude's lines in green, the old ones in red,
    right where they were. Your keyboard focus stays in the terminal.
 3. `Ctrl+Y` keeps a block. `Ctrl+N` discards it. Select two lines inside a block and `Ctrl+Y`
-   keeps just those. `Ctrl+Enter` keeps the whole file. `Alt+L`, or the **Review Next File** button
-   in the status bar, takes you to the next file.
+   keeps just those. `Ctrl+Enter` keeps the whole file. Changed your mind? `Ctrl+Z` takes it back.
+   `Alt+L`, or the **Review Next File** button in the status bar, takes you to the next file.
 4. Not now? Close everything. Tomorrow, after a reboot, every block you haven't decided on is
    still waiting.
 
@@ -60,8 +60,8 @@ sign. Hence the name.
   tree and on its tab, and the folders above it turn violet too. Git's letters stay where they are.
 - **One list, one click.** The Clause view in the Source Control sidebar lists every file and
   block, with Keep All and Discard All at the top.
-- **Safe to say no.** Discard goes through the editor, so `Ctrl+Z` brings a block back. A file
-  Claude created goes to the trash when discarded, never deleted outright.
+- **Safe to change your mind.** `Ctrl+Z` takes back a Keep or a Discard, newest first, as if it
+  were an edit. A file Claude created goes to the trash when discarded, never deleted outright.
 - **Yours alone.** Everything stays in `~/.claude/pending-edits/` on your machine, readable only by
   you. No network calls. The plugin has zero dependencies, just Node's built-in modules.
 
@@ -138,6 +138,7 @@ too.
 |---|---|
 | Keep / Discard the block at the cursor | `Ctrl+Y` / `Ctrl+N` |
 | Keep only the selected lines of a block | `Ctrl+Y`, with lines selected inside the block |
+| Take back the last Keep or Discard in this file | `Ctrl+Z` (`Cmd+Z` on a Mac) |
 | Next / previous block in this file | `Alt+J` / `Alt+K`, or `Ctrl+Alt+C` then `N` / `P` |
 | Next / previous file to review | `Alt+L` / `Alt+H`, or `Ctrl+Alt+C` then `F` / `Shift+F`; the **Review Next File** button in the status bar and the arrows in the editor title bar |
 | Keep / Discard the whole file | `Ctrl+Enter` / `Ctrl+Shift+Backspace`, or `Ctrl+Alt+C` then `Shift+K` / `Shift+D` |
@@ -163,11 +164,16 @@ Rules worth knowing:
   any other block. A block does not know who wrote it, so Discard on a block that mixes Claude's
   lines with yours reverts both. A file with no pending block is not tracked, so editing it shows
   nothing.
-- Discard goes through the editor, so `Ctrl+Z` brings the block back. **Keep cannot be undone**: it
-  moves the baseline in the store. After a Discard the file is saved, unless it already had unsaved
-  edits of yours.
-- A file Claude created is one block. Discarding it moves the file to the trash; it never deletes it
-  outright, and on a system without a trash it refuses.
+- `Ctrl+Z` takes back a Keep or a Discard as if it were an edit to the file: the newest first, and
+  only once what you typed after it is undone. A kept change is pending again; a discarded one comes
+  back, still pending. A Keep from the panel or Keep All counts too: open the file and press
+  `Ctrl+Z`. If Claude or another window has changed what is pending in the file since, `Ctrl+Z` says
+  so and changes nothing. Redo does not repeat a Keep; press `Ctrl+Y` again. After a Discard the
+  file is saved, unless it already had unsaved edits of yours.
+- A file Claude created is one block. Select some of its lines and `Ctrl+Y` keeps just those: from
+  then on it counts as a file that existed with those lines, so discarding the rest leaves them in
+  place. Discarding all of it moves the file to the trash; it never deletes it outright, and on a
+  system without a trash it refuses. `Ctrl+Z` cannot bring it back from there; the trash can.
 - A pending file that is deleted later shows as deleted. Discard recreates it from the baseline.
 - Notebooks, binary and non-UTF-8 files, and files over 2 MB get file-level Keep, Discard and Open
   diff only.
@@ -361,8 +367,10 @@ first, which can be git.
   with pending changes, show up inside its blocks.
 - A window compares the editor's text, so another window with the same file open sees your typing
   only after you save it.
-- When you discard the last block of a file in an open, otherwise clean editor, the file stops being
-  pending. `Ctrl+Z` restores the text, but not the pending state.
+- `Ctrl+Z` takes back only what was kept or discarded in this window since it last loaded. Final,
+  where `Ctrl+Z` is the editor's undo alone and restores text, not pending state: keeping a file's
+  deletion; Keep and Discard in notebooks, binary files and files over 2 MB; a Discard made while
+  the file was not open; and the last Discard in a file with unsaved edits, once you save it.
 - Each hook costs one Node start-up, about 50 ms, including one per Bash command. If `node` is not
   on the `PATH` of the process that started Claude Code, the hooks fail without blocking Claude and
   nothing is recorded.

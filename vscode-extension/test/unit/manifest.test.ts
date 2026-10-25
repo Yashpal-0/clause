@@ -12,7 +12,7 @@ interface Manifest {
   contributes: {
     commands?: { command: string; title: string; category?: string; icon?: string }[];
     menus?: Record<string, { command: string; when?: string; group?: string }[]>;
-    keybindings?: { command: string; key: string; when?: string }[];
+    keybindings?: { command: string; key: string; mac?: string; when?: string }[];
     configuration?: { properties?: Record<string, { type?: string; default?: unknown; description?: string }> };
     colors?: { id: string; description?: string; defaults?: Record<string, string> }[];
   };
@@ -211,6 +211,15 @@ test('Review All Changes is a command with a button in the title of the panel, f
     assert.ok(order(button) < order(item), `Review All sits before ${item.command}: look first, then keep or discard`);
   }
   assert.equal(inMenu('commandPalette', 'clause.reviewAll')?.when, 'clause.hasPending');
+});
+
+test('Ctrl+Z takes back a Keep or Discard only in a file that has one to take back, and is Cmd+Z on a Mac', () => {
+  const undo = keyFor('clause.undo', 'ctrl+z');
+
+  assert.equal(undo?.mac, 'cmd+z');
+  // Everywhere else Ctrl+Z is the editor's own undo, untouched.
+  assert.equal(undo?.when, 'editorTextFocus && clause.canUndo');
+  assert.equal(inMenu('commandPalette', 'clause.undo')?.when, 'false', 'a key, as undo is, and no palette entry');
 });
 
 test('every command is listed in the palette under the same category, so that typing it finds them all', () => {

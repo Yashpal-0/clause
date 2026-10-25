@@ -5,7 +5,8 @@
 // touches these files, so every format decision lives here.
 //
 //   <root>/entries/<id>/meta.json   { v, path, existed, createdAt }; exists => the file is pending
-//   <root>/entries/<id>/base        exact bytes from before Claude's first change (absent iff !existed)
+//   <root>/entries/<id>/base        the baseline: exact bytes from before Claude's first change, moved on
+//                                   by each Keep (absent iff !existed)
 //   <root>/entries/<id>/touched     { v, at, tool, line }; Claude's latest edit to the file, a hint (optional)
 //   <root>/entries/<id>/sessions    { v, dirs }; folders the Claude sessions that changed the file were started in, a hint (optional)
 //   <root>/staging/<key>/...        pre-edit bytes captured by PreToolUse, consumed by PostToolUse
@@ -179,15 +180,38 @@ export function openStore(root = defaultRoot()) {
       throw new TypeError('createEntry: base bytes are required exactly when the file existed');
     }
     if (sessionDir !== undefined && !isSessionDir(sessionDir)) throw new TypeError(`createEntry: ${SESSION_DIR_RULE}`);
-    const canonical = canonicalPath(path);
-    const final = join(entriesDir, hash(canonical));
-    const meta = { v: FORMAT_VERSION, path: canonical, existed, createdAt: new Date().toISOString() };
+    const sessionDirs = sessionDir === undefined ? [] : [sessionDir];
+    return publishEntry({ path: canonicalPath(path), existed, base, createdAt: new Date().toISOString(), sessionDirs });
+  }
+
+  /**
+   * Puts back an entry that a Keep or Discard removed, as `readEntry` gave it,
+   * so that its changes are pending again: undo. The first creator wins, as
+   * with `createEntry`; if the file has an entry again, nothing is written.
+   * @param {{ path: string, existed: boolean, base: Buffer | null, createdAt: string, sessionDirs: readonly string[] }} entry
+   * @returns {boolean} true if this call made the entry
+   */
+  function restoreEntry({ path, existed, base, createdAt, sessionDirs }) {
+    if (existed !== (base !== null)) {
+      throw new TypeError('restoreEntry: base bytes are required exactly when the file existed');
+    }
+    if (sessionDirs.length > MAX_SESSION_DIRS || !sessionDirs.every(isSessionDir)) throw new TypeError(`restoreEntry: ${SESSION_DIR_RULE}`);
+    return publishEntry({ path, existed, base, createdAt, sessionDirs });
+  }
+
+  /**
+   * Makes the entry of the canonical `path` with one rename, so that no reader
+   * sees part of it.
+   * @param {{ path: string, existed: boolean, base: Buffer | null, createdAt: string, sessionDirs: readonly string[] }} entry
+   * @returns {boolean} false if the file has an entry already
+   */
+  function publishEntry({ path, existed, base, createdAt, sessionDirs }) {
     /** @type {Record<string, Buffer>} */
-    const files = { 'meta.json': Buffer.from(JSON.stringify(meta)) };
+    const files = { 'meta.json': metaFile({ path, existed, createdAt }) };
     if (base) files.base = base;
-    if (sessionDir !== undefined) files.sessions = Buffer.from(sessionsRecord([sessionDir]));
+    if (sessionDirs.length > 0) files.sessions = Buffer.from(sessionsRecord(sessionDirs));
     mkdirp(entriesDir);
-    const created = publishDir(final, files);
+    const created = publishDir(join(entriesDir, hash(path)), files);
     if (created) fsyncDir(entriesDir);
     return created;
   }
@@ -251,29 +275,52 @@ export function openStore(root = defaultRoot()) {
   }
 
   /**
-   * Replaces an existing entry's baseline (the user kept a block). Never
-   * creates an entry. Not valid for a file Claude created: that baseline is
-   * "no file" and only ever disappears.
+   * Replaces an existing entry's baseline: the user kept some of the changes,
+   * or took a Keep back. Never creates an entry. Null is the baseline of a
+   * file Claude created, "no file": the entry becomes one for a file that did
+   * not exist. Bytes for such an entry make it one for a file that did, which
+   * is what keeping part of a new file does.
+   *
+   * No reader sees an entry that existed without its baseline: the baseline
+   * goes in before meta.json says it is there, and meta.json says it is gone
+   * before it goes.
    * @param {string} id
-   * @param {Buffer} bytes
+   * @param {Buffer | null} bytes
    * @returns {boolean} false if the entry no longer exists
    */
   function writeBase(id, bytes) {
     const meta = readMeta(id);
     if (!meta) return false;
-    if (!meta.existed) throw new TypeError('writeBase: the file was created by Claude and has no baseline');
-    mkdirp(tmpDir);
-    const scratch = join(tmpDir, `${id}.${uniqueSuffix()}`);
+    const existed = bytes !== null;
     try {
-      writeDurable(scratch, bytes);
-      renameSync(scratch, join(entryDir(id), 'base'));
+      if (bytes !== null) replaceFile(id, 'base', bytes);
+      if (meta.existed !== existed) replaceFile(id, 'meta.json', metaFile({ ...meta, existed }));
+      if (bytes === null) rmSync(join(entryDir(id), 'base'), { force: true });
     } catch (error) {
-      rmSync(scratch, { force: true });
       if (isMissing(error)) return false;
       throw error;
     }
     fsyncDir(entryDir(id));
     return true;
+  }
+
+  /**
+   * Swaps one file of an entry for `bytes` with a rename, so that a reader
+   * sees the old file or the new one, never a mix.
+   * @param {string} id
+   * @param {string} name
+   * @param {Buffer} bytes
+   */
+  function replaceFile(id, name, bytes) {
+    mkdirp(tmpDir);
+    const scratch = join(tmpDir, `${id}.${uniqueSuffix()}`);
+    try {
+      writeDurable(scratch, bytes);
+      renameSync(scratch, join(entryDir(id), name));
+    } catch (error) {
+      rmSync(scratch, { force: true });
+      throw error;
+    }
   }
 
   /**
@@ -631,6 +678,7 @@ export function openStore(root = defaultRoot()) {
     ensureEntriesDir,
     entryDir,
     createEntry,
+    restoreEntry,
     readMeta,
     readEntry,
     listEntries,
@@ -766,7 +814,15 @@ function parseTouch(text) {
   return { at, tool, line };
 }
 
-/** @param {string[]} dirs @returns {string} */
+/**
+ * @param {{ path: string, existed: boolean, createdAt: string }} meta
+ * @returns {Buffer} meta.json, in the one shape `readMeta` accepts
+ */
+function metaFile({ path, existed, createdAt }) {
+  return Buffer.from(JSON.stringify({ v: FORMAT_VERSION, path, existed, createdAt }));
+}
+
+/** @param {readonly string[]} dirs @returns {string} */
 function sessionsRecord(dirs) {
   return JSON.stringify({ v: FORMAT_VERSION, dirs });
 }

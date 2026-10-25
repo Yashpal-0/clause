@@ -154,10 +154,10 @@ export function selectedLineRanges(selections: readonly SelectionLike[]): LineRa
 }
 
 /**
- * What keeping the selected lines would keep. Only a file Claude edited has lines to pick from: a file it created
- * or deleted is one block, so it is kept or discarded whole.
+ * What keeping the selected lines would keep, in a file Claude edited or created. A file that is gone has no lines
+ * to select, and one compared only as a whole (binary, a notebook, over 2 MB) is kept whole.
  */
 export function partsToKeep(state: FileState, selections: readonly SelectionLike[]): BlockPart[] {
-  if (state.situation !== 'edited' || state.granularity !== 'blocks' || state.cur === null) return [];
+  if (state.granularity !== 'blocks' || state.cur === null) return [];
   return selectedParts(state.blocks, selectedLineRanges(selections), textLines(state.cur));
 }

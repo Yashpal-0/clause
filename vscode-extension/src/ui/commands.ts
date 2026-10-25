@@ -192,6 +192,15 @@ export function registerCommands(model: PendingModel, prompts: Prompts): vscode.
     if (next !== undefined) await openForReview(next);
   };
 
+  const undo = async () => {
+    const editor = activeEditor();
+    const result = editor === undefined ? null : await model.undo(editor.document);
+    // Nothing of Clause's to take back here, or a Discard, whose text the editor's own undo brings back.
+    return result === null ? vscode.commands.executeCommand('undo') : report(result);
+  };
+  // One Ctrl+Z at a time: each must see the text the one before left, and a held key sends them faster than they finish.
+  let undoing: Promise<unknown> = Promise.resolve();
+
   const register = (name: string, handler: (arg: unknown) => unknown) => vscode.commands.registerCommand(`clause.${name}`, handler);
 
   return vscode.Disposable.from(
@@ -202,7 +211,7 @@ export function registerCommands(model: PendingModel, prompts: Prompts): vscode.
       const file = activeFile();
       const parts = editor === undefined || file === undefined ? [] : partsToKeep(file.state, editor.selections);
       if (file === undefined || parts.length === 0) {
-        return tell('Select some lines of a pending change first. A file Claude created can only be kept whole.');
+        return tell('Select some lines of a pending change first.');
       }
       return report(await model.keepParts(file.id, parts));
     }),
@@ -245,5 +254,6 @@ export function registerCommands(model: PendingModel, prompts: Prompts): vscode.
     register('previousFile', () => stepFile(-1)),
     register('reveal', reveal),
     register('refresh', () => model.refreshAll()),
+    register('undo', () => (undoing = undoing.then(undo, undo))),
   );
 }

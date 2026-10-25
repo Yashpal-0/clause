@@ -9,6 +9,7 @@ import {
   dominantEol,
   keepBlock,
   keepParts,
+  keepPartsOfCreatedFile,
   parseDoc,
   printDoc,
   selectedParts,
@@ -458,6 +459,54 @@ test('keeping lines leaves the line endings of the baseline as they were, and th
 test('keeping nothing leaves the baseline as it was', () => {
   const base = parseDoc('a\nb\nc');
   assert.deepEqual(keepParts(base, parseDoc('a\nB\nc'), []), base);
+});
+
+/** The baseline of a file Claude created once `selection` of it is kept. */
+const keptOfCreated = (cur: string, ...selection: LineRange[]) => {
+  const curDoc = parseDoc(cur);
+  return printDoc(keepPartsOfCreatedFile(curDoc, selectedParts(createdFileBlocks(curDoc), selection, textLines(curDoc))));
+};
+
+test('keeping some lines of a file Claude created makes them its baseline, and the lines left read as added', () => {
+  const cur = 'a\nb\nc\n';
+
+  assert.equal(keptOfCreated(cur, range(1, 2)), 'b\n');
+  assert.deepEqual(content('b\n', cur, blocksOf('b\n', cur)), [
+    { removed: [], added: ['a'] },
+    { removed: [], added: ['c'] },
+  ]);
+  assert.equal(keptOfCreated(cur, range(0, 1), range(2, 3)), 'a\nc\n', 'lines apart');
+  assert.equal(keptOfCreated(cur, range(0, 3)), cur, 'every line, which leaves nothing to decide');
+});
+
+test('the kept lines of a file Claude created end as the file does, in the line ending it uses most', () => {
+  assert.equal(keptOfCreated('a\nb\nc', range(2, 3)), 'c');
+  assert.equal(keptOfCreated('a\nb\nc', range(0, 1)), 'a');
+  assert.deepEqual(content('a', 'a\nb\nc', blocksOf('a', 'a\nb\nc')), [{ removed: [], added: ['b', 'c'] }], 'not an added line break');
+  assert.equal(keptOfCreated('a\nb\nc', range(0, 3)), 'a\nb\nc');
+  assert.equal(keptOfCreated('a\r\nb\r\nc\r\n', range(0, 2)), 'a\r\nb\r\n');
+});
+
+test('keeping lines of a file Claude created leaves every other line pending (200 random texts and selections)', () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    const { cur } = randomPair(seed);
+    const random = prng(seed * 17 + 3);
+    const curDoc = parseDoc(cur);
+    const total = textLines(curDoc);
+    if (total === 0) continue;
+    const selection = Array.from({ length: 1 + Math.floor(random() * 3) }, () => {
+      const start = Math.floor(random() * total);
+      return range(start, Math.min(total, start + 1 + Math.floor(random() * 6)));
+    });
+    const selected = new Set(selection.flatMap(({ start, end }) => Array.from({ length: end - start }, (_, i) => start + i)));
+
+    const kept = keepPartsOfCreatedFile(curDoc, selectedParts(createdFileBlocks(curDoc), selection, total));
+    const after = computeBlocks(kept, curDoc);
+    // Which of two equal lines reads as kept is the diff's choice; how many lines are left is not.
+    const pending = after.reduce((sum, block) => sum + block.curEnd - block.curStart, 0);
+    assert.equal(pending, total - selected.size, `seed ${seed}`);
+    assert.ok(after.every((block) => block.kind === 'added'), `seed ${seed}: nothing reads as removed`);
+  }
 });
 
 test('keeping a selection takes exactly the selected lines out of the changes (200 random edits and selections)', () => {

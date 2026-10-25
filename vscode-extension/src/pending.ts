@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, sep } from 'node:path';
 import * as vscode from 'vscode';
 import { openStore } from '../../claude-plugin/store.mjs';
 import { Delayed } from './delayed.ts';
-import { applyLineEdit, computeBlocks, discardEdit, keepBlock, keepParts, parseDoc, printDoc, type Block, type BlockPart, type Doc } from './hunks.ts';
+import { applyLineEdit, computeBlocks, discardEdit, keepBlock, keepParts, keepPartsOfCreatedFile, parseDoc, printDoc, type Block, type BlockPart, type Doc } from './hunks.ts';
 import { anchorLine, blockLabel, findBlock } from './nav.ts';
 import { KeyedQueue } from './queue.ts';
 import { baselineText, computeState, decodeText, encodeText, type Current, type FileState } from './state.ts';
@@ -54,12 +55,21 @@ const ok: OpResult = { ok: true };
 const refuse = (reason: string): OpResult => ({ ok: false, reason });
 const CHANGED = refuse('The file changed since it was shown, so nothing was changed. Try again.');
 const GONE = refuse('Clause is no longer tracking this file.');
+const CANNOT_UNDO = refuse('Could not undo: Claude or another window has changed what is pending in this file since.');
+
+/**
+ * How many Keeps, and Discards that ended a file's review, Ctrl+Z can take back per file. Each holds the file's
+ * earlier baseline, at most 2 MB (larger ones are not held), so the cap bounds what a long review keeps in memory;
+ * going through a file one change at a time rarely needs more.
+ */
+const MAX_UNDO = 50;
 
 interface Tracked {
   readonly id: string;
   readonly path: string;
   readonly uri: vscode.Uri;
-  readonly existed: boolean;
+  /** Whether the baseline is a file: false for a file Claude created, until part of it is kept. */
+  existed: boolean;
   /** Tells a later entry for the same file apart from this one. */
   readonly createdAt: string;
   /** The baseline bytes as last read from or written to the store. Only Keep writes them. */
@@ -87,6 +97,18 @@ interface Tracked {
   readonly cleanup: Delayed;
 }
 
+/** A Keep, or a Discard that ended a file's review, as Ctrl+Z needs it to put the change back. */
+interface Undoable {
+  /** Digest of the text it left: Ctrl+Z takes it back only while the editor shows that text again. */
+  readonly text: string;
+  /** The entry as it was before. */
+  readonly entry: Readonly<Pick<Tracked, 'path' | 'existed' | 'createdAt' | 'stored' | 'sessionDirs' | 'touchedBy'>>;
+  /** The baseline a Keep wrote; null when the entry went, and with it the file's review. */
+  readonly wrote: Buffer | null;
+  /** A Discard changed the text, which the editor's own undo brings back once the entry is back. */
+  readonly editorUndo: boolean;
+}
+
 /**
  * Everything Claude changed that the user has not decided on yet, as the
  * blocks that differ from the baselines in the store. The store and the files
@@ -107,6 +129,8 @@ export class PendingModel implements vscode.Disposable {
   readonly #queue = new KeyedQueue();
   /** Document URI to entry id: the id costs a filesystem lookup and every keystroke asks for it. */
   readonly #ids = new Map<string, string>();
+  /** What Ctrl+Z can take back, by entry id, newest last. Only this window's, and gone when it reloads. */
+  readonly #undoable = new Map<string, Undoable[]>();
   readonly #subscriptions: vscode.Disposable[] = [];
   readonly #dirWatches = new Map<string, { watch: DirectoryWatch | undefined; ids: Set<string> }>();
   readonly #storeSync = new Delayed(() => this.#guard('store sync', () => this.#runStoreSync()), STORE_EVENT_DELAY_MS);
@@ -185,32 +209,36 @@ export class PendingModel implements vscode.Disposable {
       const block = findBlock(snapshot.state.blocks, wanted);
       if (snapshot.state.granularity !== 'blocks' || block === undefined) return CHANGED;
       // Created and deleted files are one block, the file; keeping the last block leaves nothing to decide.
-      if (snapshot.state.situation !== 'edited' || snapshot.state.blocks.length === 1) return this.#keepFileLocked(tracked);
+      if (snapshot.state.situation !== 'edited' || snapshot.state.blocks.length === 1) return this.#keepFileLocked(tracked, snapshot.current);
 
-      return this.#adoptBaseline(tracked, keepBlock(snapshot.state.base!, snapshot.state.cur!, block));
+      return this.#adoptBaseline(tracked, keepBlock(snapshot.state.base!, snapshot.state.cur!, block), snapshot.current);
     });
   }
 
   /**
-   * Keeps only the selected lines of the blocks `wanted` picks (see `keepParts`); the rest of each block stays
-   * pending. Refused when the file no longer has the blocks the lines were picked in: the picks are line numbers,
-   * and in a text that moved on they would be other lines.
+   * Keeps only the selected lines of the blocks `wanted` picks (see `keepParts`, and `keepPartsOfCreatedFile` for a
+   * file Claude created); the rest of each block stays pending. Refused when the file no longer has the blocks the
+   * lines were picked in: the picks are line numbers, and in a text that moved on they would be other lines.
    */
   keepParts(id: string, wanted: readonly BlockPart[]): Promise<OpResult> {
     return this.#locked(id, async (tracked) => {
-      const { state } = await this.#snapshot(tracked);
-      if (state.situation !== 'edited' || state.granularity !== 'blocks') return CHANGED;
+      const { state, current } = await this.#snapshot(tracked);
+      if (state.granularity !== 'blocks' || state.cur === null) return CHANGED;
       if (wanted.some((part) => findBlock(state.blocks, part.block) === undefined)) return CHANGED;
 
-      const base = keepParts(state.base!, state.cur!, wanted);
+      const base = state.situation === 'created' ? keepPartsOfCreatedFile(state.cur, wanted) : keepParts(state.base!, state.cur, wanted);
       // Everything that was pending got kept: the file is settled, as when its last block is kept.
-      if (computeBlocks(base, state.cur!).length === 0) return this.#keepFileLocked(tracked);
-      return this.#adoptBaseline(tracked, base);
+      if (computeBlocks(base, state.cur).length === 0) return this.#keepFileLocked(tracked, current);
+      return this.#adoptBaseline(tracked, base, current);
     });
   }
 
   keepFile(id: string): Promise<OpResult> {
-    return this.#locked(id, async (tracked) => this.#keepFileLocked(tracked));
+    return this.#locked(id, async (tracked) => {
+      // The text only lets Ctrl+Z take the Keep back; not being able to read it must not stop the Keep.
+      const current = await this.#readCurrent(tracked).catch((error: unknown) => (this.#report('keep', error), null));
+      return this.#keepFileLocked(tracked, current);
+    });
   }
 
   discardBlock(id: string, wanted: Block): Promise<OpResult> {
@@ -233,7 +261,7 @@ export class PendingModel implements vscode.Disposable {
 
       this.#recordDiscard(tracked, 'block', `${blockLabel(block)} at line ${anchorLine(block, state.cur!.lines.length) + 1}`);
       await this.#refreshNow(tracked);
-      this.#removeIfSettled(tracked);
+      if (this.#removeIfSettled(tracked) && document !== undefined) this.#rememberDiscard(tracked, document);
       return ok;
     });
   }
@@ -248,6 +276,36 @@ export class PendingModel implements vscode.Disposable {
 
   discardFiles(ids: readonly string[]): Promise<OpResult> {
     return this.#each(ids, (id) => this.discardFile(id));
+  }
+
+  /** Whether Ctrl+Z in the file at `uri` may take back a Keep or Discard made in this window. */
+  canUndo(uri: vscode.Uri): boolean {
+    const id = this.#idOf(uri);
+    return id !== null && this.#undoable.has(id);
+  }
+
+  /**
+   * Takes back the newest Keep, or Discard that ended the file's review, made in this window in the file `document`
+   * shows, if the document shows the text it left: text edited since has its own undo to come first. A Keep's
+   * changes are pending again. A Discard's entry is put back and the result is null, as when there is nothing to
+   * take back: the editor's own undo is what brings the text back, and it is the caller's to run.
+   */
+  undo(document: vscode.TextDocument): Promise<OpResult | null> {
+    const id = this.#idOf(document.uri);
+    if (id === null || !this.#undoable.has(id)) return Promise.resolve(null);
+    return this.#queue.run(id, async () => {
+      const history = this.#undoable.get(id);
+      const last = history?.at(-1);
+      if (history === undefined || last === undefined || last.text !== digest(document.getText())) return null;
+      // Used up even when it cannot be done, so that a refusal never stands between Ctrl+Z and the editor's undo.
+      history.pop();
+      if (history.length === 0) this.#undoable.delete(id);
+
+      const result = last.wrote === null ? await this.#restoreEntry(id, last) : await this.#restoreBaseline(id, last);
+      if (!last.editorUndo) return result;
+      if (!result.ok) this.#log(`undo: ${result.reason}`);
+      return null;
+    });
   }
 
   /** Stops watching. */
@@ -288,8 +346,8 @@ export class PendingModel implements vscode.Disposable {
     return problems.length === 0 ? ok : refuse(problems.join('\n'));
   }
 
-  /** Makes `base` the file's baseline: what the user kept is no longer pending. */
-  async #adoptBaseline(tracked: Tracked, base: Doc): Promise<OpResult> {
+  /** Makes `base` the file's baseline: what the user kept is no longer pending. `current` is the text it was kept in. */
+  async #adoptBaseline(tracked: Tracked, base: Doc, current: Current): Promise<OpResult> {
     const bytes = encodeText(printDoc(base), tracked.bom);
     // Another window may have kept or discarded everything, and Claude may have started a new entry for the file
     // since; writing our baseline over that one would hide Claude's newer edits as if they were the user's.
@@ -299,27 +357,32 @@ export class PendingModel implements vscode.Disposable {
       this.#syncOne(tracked.id);
       return CHANGED;
     }
+    this.#remember(tracked, textOf(current), bytes, false);
+    // A file Claude created has a baseline once some of it is kept, and is from then on one that existed.
+    tracked.existed = true;
     tracked.stored = bytes;
     tracked.baseDoc = base;
     await this.#refreshNow(tracked);
     return ok;
   }
 
-  #keepFileLocked(tracked: Tracked): OpResult {
+  /** `current` is the text the file is kept with. */
+  #keepFileLocked(tracked: Tracked, current: Current): OpResult {
+    this.#remember(tracked, textOf(current), null, false);
     this.#remove(tracked);
     return ok;
   }
 
   async #discardFileLocked(tracked: Tracked, snapshot: Snapshot): Promise<OpResult> {
     const { state } = snapshot;
+    const document = state.situation === 'edited' ? this.#openDocument(tracked) : undefined;
     let result: OpResult;
     if (state.situation === 'created') {
       result = await this.#deleteCreatedFile(tracked);
-    } else if (state.situation === 'deleted') {
-      result = await this.#restoreOnDisk(tracked);
+    } else if (document !== undefined) {
+      result = await this.#restoreInEditor(tracked, document);
     } else {
-      const document = this.#openDocument(tracked);
-      result = document !== undefined ? await this.#restoreInEditor(tracked, document) : await this.#restoreOnDisk(tracked);
+      result = await this.#restoreOnDisk(tracked);
     }
     if (!result.ok) return result;
 
@@ -328,8 +391,63 @@ export class PendingModel implements vscode.Disposable {
       this.#remove(tracked);
     } else {
       await this.#refreshNow(tracked);
-      this.#removeIfSettled(tracked);
+      if (this.#removeIfSettled(tracked) && document !== undefined) this.#rememberDiscard(tracked, document);
     }
+    return ok;
+  }
+
+  /**
+   * Lets Ctrl+Z take back what was just done to `tracked`, which must still hold the entry as it was before.
+   * `text` is the text it left, `wrote` the baseline a Keep wrote (null when the entry went).
+   */
+  #remember(tracked: Tracked, text: string | null, wrote: Buffer | null, editorUndo: boolean): void {
+    // Ctrl+Z goes by the editor's text, which a file compared only as a whole (binary, a notebook, over 2 MB) lacks.
+    if (text === null || (tracked.existed && tracked.baseDoc === null)) return;
+    const { path, existed, createdAt, stored, sessionDirs, touchedBy } = tracked;
+    const done: Undoable = { text: digest(text), entry: { path, existed, createdAt, stored, sessionDirs, touchedBy }, wrote, editorUndo };
+    this.#undoable.set(tracked.id, [...(this.#undoable.get(tracked.id) ?? []), done].slice(-MAX_UNDO));
+  }
+
+  /**
+   * A Discard in the editor that settled the file ended its review, and the editor's undo alone would bring the
+   * text back as nobody's change. Ctrl+Z puts the entry back first.
+   */
+  #rememberDiscard(tracked: Tracked, document: vscode.TextDocument): void {
+    this.#remember(tracked, document.getText(), null, true);
+    // The removal was announced before there was anything to undo, and the key that sends Ctrl+Z here reads it.
+    this.#changed.fire();
+  }
+
+  /** Puts back the baseline a Keep replaced, unless it moved on since: taking ours back would take that along. */
+  async #restoreBaseline(id: string, { entry, wrote }: Undoable): Promise<OpResult> {
+    const now = this.#store.readEntry(id);
+    if (now === null || now.createdAt !== entry.createdAt || !sameBytes(now.base, wrote)) return CANNOT_UNDO;
+    if (!this.#store.writeBase(id, entry.stored)) return CANNOT_UNDO;
+
+    const tracked = this.#tracked.get(id);
+    if (tracked === undefined || tracked.createdAt !== entry.createdAt) {
+      this.#syncOne(id);
+      return ok;
+    }
+    const text = baselineText(tracked.path, entry.stored);
+    tracked.existed = entry.existed;
+    tracked.stored = entry.stored;
+    tracked.baseDoc = text === null ? null : parseDoc(text.text);
+    await this.#refreshNow(tracked);
+    return ok;
+  }
+
+  /** Puts back an entry a Keep or Discard removed, unless the file has one again: Claude changed it since. */
+  async #restoreEntry(id: string, { entry }: Undoable): Promise<OpResult> {
+    const { path, existed, createdAt, stored, sessionDirs, touchedBy } = entry;
+    if (!this.#store.restoreEntry({ path, existed, base: stored, createdAt, sessionDirs })) return CANNOT_UNDO;
+    const restored = this.#store.readEntry(id);
+    if (restored === null) return CANNOT_UNDO;
+
+    const stale = this.#tracked.get(id);
+    if (stale !== undefined) this.#drop(stale);
+    // Loaded here, not on the store's event, which would take the entry for a new edit of Claude's and open the file.
+    await this.#refreshNow(this.#load(restored, touchedBy));
     return ok;
   }
 
@@ -722,6 +840,17 @@ function sameShape(a: FileState, b: FileState): boolean {
       );
     })
   );
+}
+
+/** Ctrl+Z compares whole texts, which can run to megabytes, with up to `MAX_UNDO` earlier ones: digests suffice. */
+function digest(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+/** The text an editor shows for `current`, which reads a file as UTF-8 without its BOM; null for no text. */
+function textOf(current: Current): string | null {
+  if (current === null) return null;
+  return 'text' in current ? current.text : (decodeText(current.bytes)?.text ?? null);
 }
 
 function sameBytes(a: Buffer | null, b: Buffer | null): boolean {

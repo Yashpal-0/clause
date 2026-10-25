@@ -255,7 +255,7 @@ test('a cursor with nothing selected selects nothing, and several selections are
   assert.deepEqual(selectedLineRanges([]), []);
 });
 
-test('lines are kept by selecting them in a file Claude edited, and in no other', () => {
+test('lines are kept by selecting them in a file Claude edited or created, and in no other', () => {
   const state = (existed: boolean, baseline: string | null, current: string | null) =>
     computeState({
       path: '/x/file.txt',
@@ -270,7 +270,7 @@ test('lines are kept by selecting them in a file Claude edited, and in no other'
   assert.deepEqual(partsToKeep(edited, [selection(0, 0, 1, 0)]), [], 'a selection of unchanged lines');
   assert.deepEqual(partsToKeep(edited, []), [], 'no selection');
 
-  assert.deepEqual(partsToKeep(state(false, null, 'a\nb\n'), lines), [], 'a file Claude created is one block: all or nothing');
+  assert.equal(partsToKeep(state(false, null, 'a\nb\n'), lines).length, 1, 'a file Claude created');
   assert.deepEqual(partsToKeep(state(true, 'a\nb\n', null), lines), [], 'a file that is gone');
   assert.deepEqual(partsToKeep(computeState({ path: '/x/pic.bin', existed: true, baseline: Buffer.from([0, 1]), current: { bytes: Buffer.from([0, 2]) } }), lines), [], 'a file that is kept whole');
 });

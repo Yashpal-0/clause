@@ -148,6 +148,11 @@
         "title": "Refresh",
         "category": "Clause",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "clause.undo",
+        "title": "Undo Keep or Discard",
+        "category": "Clause"
       }
     ],
     "views": {
@@ -319,6 +324,10 @@
           "when": "false"
         },
         {
+          "command": "clause.undo",
+          "when": "false"
+        },
+        {
           "command": "clause.keepBlock",
           "when": "clause.inBlock"
         },
@@ -447,6 +456,12 @@
         "command": "clause.discardFile",
         "key": "ctrl+shift+backspace",
         "when": "editorTextFocus && clause.fileHasPending"
+      },
+      {
+        "command": "clause.undo",
+        "key": "ctrl+z",
+        "mac": "cmd+z",
+        "when": "editorTextFocus && clause.canUndo"
       }
     ],
     "configuration": {

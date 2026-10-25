@@ -7,8 +7,9 @@ import { scopedCounts } from './scope.ts';
  * The context keys that `when` clauses of menus and keybindings read:
  * `clause.hasPending` (the window lists something, see `scopedCounts`),
  * `clause.fileHasPending` (the active editor's file),
- * `clause.inBlock` (the cursor is in a block) and
- * `clause.selectionInPending` (the selected lines include pending ones that can be kept on their own).
+ * `clause.inBlock` (the cursor is in a block),
+ * `clause.selectionInPending` (the selected lines include pending ones that can be kept on their own) and
+ * `clause.canUndo` (Ctrl+Z in the active editor may take back a Keep or Discard, see `PendingModel.undo`).
  */
 export class ContextKeys implements vscode.Disposable {
   readonly #model: PendingModel;
@@ -40,6 +41,7 @@ export class ContextKeys implements vscode.Disposable {
     this.#set('clause.fileHasPending', file !== undefined);
     this.#set('clause.inBlock', editor !== undefined && file !== undefined && blockAtLine(file.state.blocks, editor.selection.active.line) !== undefined);
     this.#set('clause.selectionInPending', editor !== undefined && file !== undefined && partsToKeep(file.state, editor.selections).length > 0);
+    this.#set('clause.canUndo', editor !== undefined && this.#model.canUndo(editor.document.uri));
   }
 
   dispose(): void {

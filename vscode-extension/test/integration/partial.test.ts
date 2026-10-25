@@ -114,18 +114,60 @@ describe('keeping the selected lines of a change', () => {
     assert.equal(storedBaseline(path), BEFORE);
   });
 
-  it('cannot pick lines of a file Claude created, which is kept or discarded whole', async () => {
-    const path = seedCreated('new.txt', 'a\nb\nc\n');
-    await onlyPendingFile(api);
-    const editor = await open(path);
-    editor.selection = new vscode.Selection(0, 0, 2, 0);
+  describe('in a file Claude created', () => {
+    const CREATED = 'a\nb\nc\n';
 
-    await vscode.commands.executeCommand('clause.keepSelection');
+    async function openCreated(): Promise<{ path: string; editor: vscode.TextEditor }> {
+      const path = seedCreated('new.txt', CREATED);
+      await onlyPendingFile(api);
+      return { path, editor: await open(path) };
+    }
 
-    assert.equal(messages.length, 1);
-    assert.equal(hasEntry(path), true);
-    await sleep(100);
-    assert.equal(api.context.value(KEY), false);
+    it('makes the selected lines the baseline and leaves the other lines pending as added', async () => {
+      const { path, editor } = await openCreated();
+      editor.selection = new vscode.Selection(1, 0, 2, 0);
+
+      await vscode.commands.executeCommand('clause.keepSelection');
+
+      assert.equal(storedBaseline(path), 'b\n');
+      await waitFor('the file to count as one that existed', () => pendingAt(api, path)?.state.situation === 'edited');
+      assert.deepEqual(left(path), [
+        { removed: [], added: ['a'] },
+        { removed: [], added: ['c'] },
+      ]);
+      assert.equal(read(path), CREATED, 'the file itself is not touched');
+    });
+
+    it('leaves the kept lines in place once the rest is discarded, rather than moving the file to the trash', async () => {
+      const { path, editor } = await openCreated();
+      editor.selection = new vscode.Selection(1, 0, 2, 0);
+      await vscode.commands.executeCommand('clause.keepSelection');
+      await waitFor('the file to count as one that existed', () => pendingAt(api, path)?.state.situation === 'edited');
+
+      await vscode.commands.executeCommand('clause.discardFile');
+
+      await waitFor('the file to be settled', () => api.model.files().length === 0);
+      assert.equal(read(path), 'b\n');
+      assert.equal(hasEntry(path), false);
+    });
+
+    it('keeps the file when every line of it is selected', async () => {
+      const { path, editor } = await openCreated();
+      editor.selection = new vscode.Selection(0, 0, 3, 0);
+
+      await vscode.commands.executeCommand('clause.keepSelection');
+
+      assert.equal(hasEntry(path), false);
+      await waitFor('the file to be settled', () => api.model.files().length === 0);
+      assert.equal(read(path), CREATED);
+    });
+
+    it('turns on the context key, so that Ctrl+Y keeps the selected lines rather than the whole file', async () => {
+      const { editor } = await openCreated();
+      editor.selection = new vscode.Selection(0, 0, 1, 0);
+
+      await waitFor('the key to turn on', () => api.context.value(KEY) === true);
+    });
   });
 
   it('refuses when the file changed after the lines were picked, so that other lines are not kept', async () => {

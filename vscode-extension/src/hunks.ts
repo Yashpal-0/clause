@@ -268,6 +268,17 @@ function baselineAfterKeeping(base: Doc, cur: Doc, { block, ranges }: BlockPart)
   return lines;
 }
 
+/**
+ * The baseline of a file Claude created once the user keeps `parts` of it: the selected lines as a file of their
+ * own, against which the lines left read as added. It ends in a line break when the file does, so that keeping
+ * every line leaves nothing pending.
+ */
+export function keepPartsOfCreatedFile(cur: Doc, parts: readonly BlockPart[]): Doc {
+  const eol = dominantEol(cur);
+  const kept = parts.flatMap(({ ranges }) => ranges.flatMap((range) => cur.lines.slice(range.start, range.end)));
+  return parseDoc(kept.join(eol) + (cur.lines.at(-1) === '' ? eol : ''));
+}
+
 /** The parts of `ranges` inside `start..end`, in order, with the ones that touch or overlap joined. */
 function clipRanges(ranges: readonly LineRange[], start: number, end: number): LineRange[] {
   const inside = ranges

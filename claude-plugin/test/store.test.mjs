@@ -224,6 +224,96 @@ test('writeBase leaves no temporary files behind', (t) => {
   assert.deepEqual(readdirSync(entryDir).sort(), ['base', 'meta.json']);
 });
 
+test('writeBase gives a file Claude created a baseline, and the entry then reads as one for a file that existed', (t) => {
+  const { root, work, store } = setup(t);
+  const file = join(work, 'new.txt');
+  store.createEntry({ path: file, existed: false, base: null });
+  const id = store.idFor(file);
+  const before = store.readMeta(id);
+
+  assert.equal(store.writeBase(id, Buffer.from('kept\n')), true);
+
+  const entry = store.readEntry(id);
+  assert.equal(entry?.existed, true);
+  assert.equal(entry?.base?.toString(), 'kept\n');
+  assert.equal(entry?.createdAt, before?.createdAt, 'the same entry, not a new one');
+  assert.equal(entry?.path, before?.path);
+  assert.deepEqual(readdirSync(join(root, 'entries', id)).sort(), ['base', 'meta.json']);
+});
+
+test('writeBase with null makes the entry one for a file Claude created again, without a baseline left behind', (t) => {
+  const { root, work, store } = setup(t);
+  const file = join(work, 'f.txt');
+  store.createEntry({ path: file, existed: true, base: Buffer.from('old') });
+  const id = store.idFor(file);
+  const createdAt = store.readMeta(id)?.createdAt;
+
+  assert.equal(store.writeBase(id, null), true);
+
+  const entry = store.readEntry(id);
+  assert.equal(entry?.existed, false);
+  assert.equal(entry?.base, null);
+  assert.equal(entry?.createdAt, createdAt);
+  assert.deepEqual(readdirSync(join(root, 'entries', id)), ['meta.json']);
+  assert.equal(store.writeBase(id, null), true, 'a file Claude created already has no baseline');
+  assert.equal(store.writeBase(store.idFor(join(work, 'gone.txt')), null), false);
+});
+
+test('restoreEntry puts back a removed entry as readEntry gave it, session folders and creation time included', (t) => {
+  const { work, store } = setup(t);
+  const file = join(work, 'f.txt');
+  store.createEntry({ path: file, existed: true, base: Buffer.from('v1'), sessionDir: work });
+  store.addSessionDir(store.idFor(file), join(work, 'sub'));
+  const id = store.idFor(file);
+  const entry = store.readEntry(id);
+  assert.ok(entry);
+  store.removeEntry(id);
+
+  assert.equal(store.restoreEntry(entry), true);
+
+  assert.deepEqual(store.readEntry(id), entry);
+});
+
+test('restoreEntry puts back the entry of a file Claude created', (t) => {
+  const { work, store } = setup(t);
+  const file = join(work, 'new.txt');
+  store.createEntry({ path: file, existed: false, base: null });
+  const entry = store.readEntry(store.idFor(file));
+  assert.ok(entry);
+  store.removeEntry(entry.id);
+
+  assert.equal(store.restoreEntry(entry), true);
+
+  assert.deepEqual(store.readEntry(entry.id), entry);
+});
+
+test('restoreEntry leaves an entry the file has again alone', (t) => {
+  const { work, store } = setup(t);
+  const file = join(work, 'f.txt');
+  store.createEntry({ path: file, existed: true, base: Buffer.from('v1') });
+  const id = store.idFor(file);
+  const old = store.readEntry(id);
+  assert.ok(old);
+  store.removeEntry(id);
+  store.createEntry({ path: file, existed: true, base: Buffer.from('v2') });
+  const newer = store.readEntry(id);
+
+  assert.equal(store.restoreEntry(old), false);
+
+  assert.deepEqual(store.readEntry(id), newer);
+});
+
+test('restoreEntry refuses what readEntry would never give, and creates nothing', (t) => {
+  const { work, store } = setup(t);
+  const path = join(work, 'f.txt');
+  const createdAt = new Date().toISOString();
+
+  assert.throws(() => store.restoreEntry({ path, existed: true, base: null, createdAt, sessionDirs: [] }), /exactly when the file existed/);
+  assert.throws(() => store.restoreEntry({ path, existed: false, base: Buffer.from('x'), createdAt, sessionDirs: [] }), /exactly when the file existed/);
+  assert.throws(() => store.restoreEntry({ path, existed: false, base: null, createdAt, sessionDirs: ['relative'] }), /absolute path/);
+  assert.deepEqual(store.listEntries(), []);
+});
+
 test('removeEntry deletes the entry and lets a later edit start a fresh baseline', (t) => {
   const { work, store } = setup(t);
   const file = join(work, 'f.txt');
