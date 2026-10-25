@@ -4,5 +4,6 @@ node_modules/
 out/
 dist/
 .vscode-test/
-.claude/
+.claude/*
+!.claude/settings.json
 /vscode-extension/README.md
