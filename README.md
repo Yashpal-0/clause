@@ -106,13 +106,16 @@ removed lines, and the Discard/Keep bar as a CodeLens above each block.
 **3. Install the Claude Code plugin**
 
 ```sh
-claude plugin marketplace add /path/to/clause      # the folder you cloned
+claude plugin marketplace add Yashpal-0/clause
 claude plugin install clause@clause --scope user
 ```
 
-Start a new Claude Code session, or run `/reload-plugins` in a running one. Claude Code runs a copy
-of `claude-plugin/` (under `~/.claude/plugins/cache/`), so after the plugin's code changes, for
-example after a `git pull`, uninstall it and install it again.
+Start a new Claude Code session, or run `/reload-plugins` in a running one. To update later, run
+`claude plugin marketplace update clause`, then `claude plugin update clause@clause`.
+
+Working from a clone instead? `claude plugin marketplace add /path/to/clause` works too. Claude Code
+runs a copy of `claude-plugin/` (under `~/.claude/plugins/cache/`), so after the plugin's code
+changes, for example after a `git pull`, uninstall it and install it again.
 
 **4. Optional: track shell commands**
 
@@ -419,7 +422,7 @@ the `bashEditDiffEnabled` line from `~/.claude/settings.json` if you added it, a
 ## Development
 
 ```
-.claude-plugin/marketplace.json   local marketplace that points at claude-plugin/
+.claude-plugin/marketplace.json   the marketplace Claude Code installs from; points at claude-plugin/
 claude-plugin/                    hooks, store and reverse-diff: plain JavaScript with JSDoc types
 vscode-extension/                 the extension: TypeScript, bundled by esbuild
 package.json, tsconfig.plugin.json  tooling for the plugin, kept outside claude-plugin/ because
