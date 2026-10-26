@@ -1,0 +1,11 @@
+{
+  "name": "clause-opencode",
+  "version": "0.1.0",
+  "description": "Shows what OpenCode agents edit in Clause's Keep/Discard review in VS Code and Cursor.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/Yashpal-0/clause"
+}

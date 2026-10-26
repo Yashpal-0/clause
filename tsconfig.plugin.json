@@ -10,5 +10,5 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["claude-plugin/store.mjs", "claude-plugin/hook.mjs", "claude-plugin/reverse-diff.mjs"]
+  "include": ["claude-plugin/store.mjs", "claude-plugin/hook.mjs", "claude-plugin/reverse-diff.mjs", "opencode-plugin/index.js"]
 }

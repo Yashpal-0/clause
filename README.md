@@ -10,6 +10,9 @@ Claude writes straight to disk, at full speed. Clause keeps each of those change
 inline in your editor, until you **Keep** it or **Discard** it: one block, one file, or all at
 once. Close Claude, close the editor, reboot. Your review is right where you left it.
 
+It works with Claude Code and, through a second small plugin, with [OpenCode](https://opencode.ai)
+2.x.
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![VS Code 1.100+ and Cursor](https://img.shields.io/badge/VS%20Code%201.100%2B%20%7C%20Cursor-extension-007ACC?logo=visualstudiocode&logoColor=white)](#quick-start)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8957E5.svg)](#quick-start)
@@ -128,6 +131,24 @@ reports them to hooks, which it does after this setting is on in `~/.claude/sett
 
 It also needs the changed file to be inside a git repository. See the limits below.
 
+**5. Optional: OpenCode**
+
+Edits that an OpenCode 2.x agent makes go through the same review, in the same panel and bars. The
+plugin is the folder `opencode-plugin/`. It runs the hook in `claude-plugin/`, so it needs a clone
+of this repository; the marketplace copy of `claude-plugin/` alone is not enough. Add the folder to
+`plugins` in `~/.config/opencode/opencode.json`:
+
+```json
+"plugins": ["/path/to/clause/opencode-plugin"]
+```
+
+Then restart OpenCode, or run `opencode reload` if its background service is running, and check
+that `opencode plugin list` shows `clause`. OpenCode 1.x has a different plugin API and is not
+supported. If edits do not show up, look in OpenCode's log
+(`~/.local/share/opencode/log/opencode.log`) for `failed to load plugin` with `plugin.id=clause`:
+the usual cause is `node` missing from the `PATH` OpenCode runs with, and `CLAUSE_NODE` can name
+its full path.
+
 ## Using it
 
 Put Claude Code in **accept edits** mode (Shift+Tab) to get the Cursor flow: it edits, you review
@@ -175,6 +196,9 @@ Rules worth knowing:
   place. Discarding all of it moves the file to the trash; it never deletes it outright, and on a
   system without a trash it refuses. `Ctrl+Z` cannot bring it back from there; the trash can.
 - A pending file that is deleted later shows as deleted. Discard recreates it from the baseline.
+- Nothing in the editor tells an OpenCode agent's edits from Claude's. A Discard is put to an
+  OpenCode session on its next prompt, as it is to a Claude one, and every session of either kind
+  that was started in a folder containing the file hears about it once.
 - Notebooks, binary and non-UTF-8 files, and files over 2 MB get file-level Keep, Discard and Open
   diff only.
 - The panel lists the files inside this window's workspace folders, and under "Outside this
@@ -376,6 +400,20 @@ first, which can be git.
   nothing is recorded.
 - A keystroke inside a block of a 20,000-line file takes about 100 ms to process.
 
+**OpenCode**
+
+- Only OpenCode 2.x is supported, the version that lists plugins under `plugins`. Checked against
+  2.1.4 on Linux, with a scripted stand-in for the model; no real model, TUI or Windows run.
+- The `edit`, `write` and `patch` tools are tracked. Files changed through the `shell` tool, by an
+  MCP server or by another plugin are not: OpenCode gives no state from before a command, and
+  `bashEditDiffEnabled` belongs to Claude Code.
+- Each file of an edit costs two Node start-ups, about 50 ms each (a patch of many files runs four at
+  a time). If `node` cannot be started when OpenCode loads the plugin, the plugin fails to load,
+  OpenCode logs it and nothing is recorded. Hook failures after that go to `errors.log`, as with
+  Claude Code.
+- A call OpenCode reports as failed is still compared with the files as they were, so a patch that
+  failed halfway leaves the files it did change pending.
+
 **Shell commands** (`bashEditDiffEnabled` on, file inside a git repository). Not tracked: commands
 that exit non-zero; background commands; binary and non-UTF-8 files; commands that change more than
 5 files; hunks of 400 lines or more; git-ignored files and files outside the repository; deleting a
@@ -400,6 +438,8 @@ path, and the kind of block with its line number, never content), and for each C
 plugin keeps how far it has read that log, which is how your next prompt can tell Claude what you
 discarded. Everything stays on your machine, in files and directories only you can read (modes 0600
 and 0700). Hook failures are written to `errors.log` in the same folder, without file contents.
+The OpenCode plugin uses the same store and sends nothing anywhere: it starts `node` on the hook
+and gives it the path of each edited file and the folder of the session.
 
 Deleting the folder clears all pending state. Every file keeps whatever it contains on disk.
 
@@ -413,6 +453,7 @@ Deleting the folder clears all pending state. Every file keeps whatever it conta
   quick start), but how they look on screen has not been checked: Cursor's login screen blocked a
   clean test profile.
 - `git`, only for the optional shell-command tracking.
+- OpenCode 2.x, only for the OpenCode plugin (developed against 2.1.4).
 
 ## Uninstall
 
@@ -424,21 +465,23 @@ cursor --uninstall-extension clause.clause
 ```
 
 Then remove the `enable-proposed-api` entry from `~/.vscode/argv.json` and `~/.cursor/argv.json`,
-the `bashEditDiffEnabled` line from `~/.claude/settings.json` if you added it, and, if you want,
-`~/.claude/pending-edits/`.
+the `bashEditDiffEnabled` line from `~/.claude/settings.json` if you added it, the
+`opencode-plugin` entry from `plugins` in `~/.config/opencode/opencode.json` if you added it, and,
+if you want, `~/.claude/pending-edits/`.
 
 ## Development
 
 ```
 .claude-plugin/marketplace.json   the marketplace Claude Code installs from; points at claude-plugin/
 claude-plugin/                    hooks, store and reverse-diff: plain JavaScript with JSDoc types
+opencode-plugin/                  the OpenCode plugin: turns OpenCode's tool events into calls of the hook
 vscode-extension/                 the extension: TypeScript, bundled by esbuild
 package.json, tsconfig.plugin.json  tooling for the plugin, kept outside claude-plugin/ because
                                   the marketplace copies that folder
 ```
 
 ```sh
-npm install && npm test                 # plugin: typecheck, then node --test
+npm install && npm test                 # plugins: typecheck, then node --test
 cd vscode-extension
 npm install && npm test                 # extension: typecheck, then unit tests
 npm run test:integration                # runs the installed VS Code (/usr/share/code/code) under xvfb
@@ -450,6 +493,10 @@ own workspace, store and `HOME`, so the `argv.json` from step 2 of the install d
 a run allows. `.vscode-test.mjs` points at `/usr/share/code/code`; change that path if VS Code is
 installed elsewhere. Tests must never touch the real `~/.claude/pending-edits`, which is
 why `CLAUDE_PENDING_EDITS_DIR` exists.
+
+The OpenCode plugin's end-to-end tests (`opencode-plugin/test/e2e.test.mjs`) run the real `opencode`
+binary in a private home against a scripted model, and are skipped when it is not installed;
+`OPENCODE_BIN` names a binary that is not on the `PATH`.
 
 ## License
 

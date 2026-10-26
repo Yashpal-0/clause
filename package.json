@@ -4,8 +4,9 @@
   "description": "Dev tooling for the Clause Claude Code plugin. The shipped plugin lives in claude-plugin/ and has no dependencies.",
   "scripts": {
     "test:plugin": "node --test \"claude-plugin/test/*.test.mjs\"",
+    "test:opencode": "node --test \"opencode-plugin/test/*.test.mjs\"",
     "typecheck:plugin": "tsc -p tsconfig.plugin.json",
-    "test": "npm run typecheck:plugin && npm run test:plugin"
+    "test": "npm run typecheck:plugin && npm run test:plugin && npm run test:opencode"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
