@@ -25,12 +25,25 @@
 
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openStore } from '../claude-plugin/store.mjs';
 
-const HOOK = join(dirname(fileURLToPath(import.meta.url)), '..', 'claude-plugin', 'hook.mjs');
+function findHook() {
+  const dir = dirname(fileURLToPath(import.meta.url));
+  const candidate = join(dir, '..', 'claude-plugin', 'hook.mjs');
+  if (existsSync(candidate)) return candidate;
+  try {
+    const realDir = dirname(realpathSync.native(fileURLToPath(import.meta.url)));
+    const candidate2 = join(realDir, '..', 'claude-plugin', 'hook.mjs');
+    if (existsSync(candidate2)) return candidate2;
+  } catch {}
+  return candidate;
+}
+
+const HOOK = findHook();
 
 /**
  * OpenCode's file-changing tools, with the Claude tool name the hook tracks them as. The hook only
@@ -80,6 +93,7 @@ const PATCH_HEADERS = ['*** Add File: ', '*** Delete File: ', '*** Update File: 
  * @property {string} sessionID
  * @property {string} directory the folder the session was started in
  * @property {{ path: string, key: string }[]} files `key` is what the hook saves the file's bytes under in between
+ * @property {unknown} [input] what the model passed to the tool
  */
 
 export default {
@@ -87,15 +101,16 @@ export default {
 
   /** @param {Context} ctx */
   async setup(ctx) {
-    if (!(await runHook('session-start', {})).started) {
+    const started = await runHook('session-start', {});
+    if (!started.started || started.code !== 0) {
       throw new Error(
         'Clause could not start Node.js to record edits. Put `node` on the PATH that OpenCode runs with, or set CLAUSE_NODE to the full path of the node binary.',
       );
     }
 
-    /** @type {Map<string, Call>} */
+    /** @type {Map<string, Call[]>} */
     const calls = new Map();
-    const keyOf = (/** @type {ToolEvent} */ event) => [event.sessionID, event.messageID, event.id].join('\0');
+    const keyOf = (/** @type {ToolEvent} */ event) => [event.sessionID, event.messageID, event.id, event.tool].join('\0');
 
     await ctx.tool.hook('execute.before', async (event) => {
       try {
@@ -106,8 +121,11 @@ export default {
         const batch = randomUUID();
         const files = editedPaths(event.tool, event.input, directory).map((path, index) => ({ path, key: `${batch}-${index}` }));
         if (files.length === 0) return;
-        const call = { tool, sessionID: event.sessionID, directory, files };
-        calls.set(keyOf(event), call);
+        const call = { tool, sessionID: event.sessionID, directory, files, input: event.input };
+        const key = keyOf(event);
+        const existing = calls.get(key) ?? [];
+        existing.push(call);
+        calls.set(key, existing);
         await runForFiles('pre', call);
       } catch (error) {
         logError('execute.before', error);
@@ -116,9 +134,17 @@ export default {
 
     await ctx.tool.hook('execute.after', async (event) => {
       try {
-        const call = calls.get(keyOf(event));
-        if (call === undefined) return;
-        calls.delete(keyOf(event));
+        const key = keyOf(event);
+        const list = calls.get(key);
+        if (list === undefined || list.length === 0) return;
+        let index = list.findIndex((c) => c.input === event.input);
+        if (index === -1) {
+          const files = editedPaths(event.tool, event.input, list[0].directory);
+          index = list.findIndex((c) => c.files.length === files.length && c.files.every((f, i) => f.path === files[i]));
+        }
+        if (index === -1) index = 0;
+        const [call] = list.splice(index, 1);
+        if (list.length === 0) calls.delete(key);
         // `post` also for a call that reports an error: a patch can fail after it changed some files.
         // The hook compares each file with its saved bytes and records only a real difference, so a
         // call that changed nothing leaves nothing behind either way.
@@ -150,7 +176,7 @@ export default {
  * @param {string} event the hook.mjs event name
  * @param {Record<string, unknown>} payload as Claude Code would send it
  * @param {{ timeoutMs?: number }} [options]
- * @returns {Promise<{ started: boolean, stdout: string }>} `started` is false only when Node could not be run
+ * @returns {Promise<{ started: boolean, stdout: string, stderr?: string, code?: number | null }>} `started` is false only when Node could not be run
  */
 export function runHook(event, payload, { timeoutMs = HOOK_TIMEOUT_MS } = {}) {
   return new Promise((done) => {
@@ -158,21 +184,26 @@ export function runHook(event, payload, { timeoutMs = HOOK_TIMEOUT_MS } = {}) {
     // "started": the payload's cwd, the session's own folder, does.
     const { CLAUDE_PROJECT_DIR: _inherited, ...env } = process.env;
     let stdout = '';
+    let stderr = '';
     let child;
     try {
-      child = spawn(process.env.CLAUSE_NODE || 'node', [HOOK, event], { stdio: ['pipe', 'pipe', 'ignore'], env });
+      child = spawn(process.env.CLAUSE_NODE || 'node', [HOOK, event], { stdio: ['pipe', 'pipe', 'pipe'], env });
     } catch {
-      return done({ started: false, stdout });
+      return done({ started: false, stdout, stderr, code: null });
     }
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
-    const finish = (/** @type {boolean} */ started) => {
+    const finish = (/** @type {boolean} */ started, /** @type {number | null} */ code) => {
       clearTimeout(timer);
-      done({ started, stdout });
+      if (code !== 0 && code !== null && stderr.trim() !== '') {
+        logError(`hook ${event} (exit ${code})`, new Error(stderr.trim()));
+      }
+      done({ started, stdout, stderr, code });
     };
     child.stdout.on('data', (chunk) => (stdout += chunk));
+    child.stderr.on('data', (chunk) => (stderr += chunk));
     child.stdin.on('error', () => {}); // the hook exiting before it read its input is its business, not an error here
-    child.on('error', () => finish(false));
-    child.on('close', () => finish(true));
+    child.on('error', () => finish(false, null));
+    child.on('close', (code) => finish(true, code));
     child.stdin.end(JSON.stringify(payload));
   });
 }
@@ -190,7 +221,11 @@ export function patchPaths(patchText) {
   return patchText.split('\n').flatMap((line) => {
     const header = line.trim();
     const prefix = PATCH_HEADERS.find((candidate) => header.startsWith(candidate));
-    const path = prefix === undefined ? '' : header.slice(prefix.length).trim();
+    if (prefix === undefined) return [];
+    let path = header.slice(prefix.length).trim();
+    if ((path.startsWith('"') && path.endsWith('"')) || (path.startsWith("'") && path.endsWith("'"))) {
+      path = path.slice(1, -1).trim();
+    }
     return path === '' ? [] : [path];
   });
 }
@@ -215,9 +250,11 @@ export function resolveTarget(directory, path, home = homedir()) {
  */
 function editedPaths(tool, input, directory) {
   const fields = /** @type {Record<string, unknown>} */ (input !== null && typeof input === 'object' ? input : {});
+  const rawPath = fields.path ?? fields.filePath ?? fields.file_path ?? fields.target ?? fields.file;
+  const rawPatch = fields.patchText ?? fields.patch ?? fields.patch_text;
   /** @type {string[]} */
-  const named = tool === 'patch' ? patchPaths(fields.patchText) : typeof fields.path === 'string' ? [fields.path] : [];
-  return named.filter((path) => path !== '').map((path) => resolveTarget(directory, path));
+  const named = tool === 'patch' ? patchPaths(rawPatch) : typeof rawPath === 'string' ? [rawPath] : [];
+  return Array.from(new Set(named.filter((path) => path !== '').map((path) => resolveTarget(directory, path))));
 }
 
 /**
@@ -232,6 +269,15 @@ async function runForFiles(event, call) {
   }
 }
 
+/** @param {string} dir */
+function canonical(dir) {
+  try {
+    return realpathSync.native(dir);
+  } catch {
+    return resolve(dir);
+  }
+}
+
 /**
  * @param {Context} ctx
  * @param {string} sessionID
@@ -240,11 +286,11 @@ async function runForFiles(event, call) {
 async function sessionDirectory(ctx, sessionID) {
   try {
     const directory = (await ctx.session.get({ sessionID })).location?.directory;
-    if (typeof directory === 'string' && isAbsolute(directory)) return directory;
+    if (typeof directory === 'string' && isAbsolute(directory)) return canonical(directory);
   } catch {
     // A session OpenCode cannot describe: the folder this plugin was loaded for is the best guess left.
   }
-  return ctx.location.directory;
+  return canonical(ctx.location.directory);
 }
 
 /**

@@ -394,3 +394,65 @@ test('resolveTarget resolves a tool path the way OpenCode does', () => {
   assert.equal(resolveTarget('/work', '~/d.txt', '/home/u'), '/home/u/d.txt');
   assert.equal(resolveTarget('/work', '~other/e.txt', '/home/u'), '/work/~other/e.txt');
 });
+
+test('concurrent calls sharing the same call id (such as within a Code Mode script) are each tracked correctly', async (t) => {
+  const env = await start(t);
+  const a = join(env.work, 'a.txt');
+  const b = join(env.work, 'b.txt');
+  writeFileSync(a, 'a0\n');
+  writeFileSync(b, 'b0\n');
+
+  const eventA = { tool: 'write', sessionID: 'ses_1', agent: 'build', messageID: 'msg_1', id: 'execute_call_1', input: { path: a, content: 'a1\n' } };
+  const eventB = { tool: 'write', sessionID: 'ses_1', agent: 'build', messageID: 'msg_1', id: 'execute_call_1', input: { path: b, content: 'b1\n' } };
+
+  await env.hooks.get('execute.before')?.(eventA);
+  await env.hooks.get('execute.before')?.(eventB);
+  writeFileSync(a, 'a1\n');
+  writeFileSync(b, 'b1\n');
+  await env.hooks.get('execute.after')?.({ ...eventB, status: 'completed' });
+  await env.hooks.get('execute.after')?.({ ...eventA, status: 'completed' });
+
+  assert.equal(text(entryOf(env, a)?.base), 'a0\n');
+  assert.equal(text(entryOf(env, b)?.base), 'b0\n');
+});
+
+test('input property variations (filePath, file_path, target, file, patch, patch_text) are recognized', async (t) => {
+  const env = await start(t);
+  const f1 = join(env.work, 'f1.txt');
+  const f2 = join(env.work, 'f2.txt');
+  const f3 = join(env.work, 'f3.txt');
+  const f4 = join(env.work, 'f4.txt');
+  const f5 = join(env.work, 'f5.txt');
+  writeFileSync(f1, 'v1\n');
+  writeFileSync(f2, 'v2\n');
+  writeFileSync(f3, 'v3\n');
+  writeFileSync(f4, 'v4\n');
+  writeFileSync(f5, 'v5\n');
+
+  await call(env, { tool: 'edit', input: { filePath: f1, oldString: 'v1', newString: 'V1' }, run: () => writeFileSync(f1, 'V1\n') });
+  await call(env, { tool: 'edit', input: { file_path: f2, oldString: 'v2', newString: 'V2' }, run: () => writeFileSync(f2, 'V2\n') });
+  await call(env, { tool: 'edit', input: { target: f3, oldString: 'v3', newString: 'V3' }, run: () => writeFileSync(f3, 'V3\n') });
+  await call(env, { tool: 'edit', input: { file: f4, oldString: 'v4', newString: 'V4' }, run: () => writeFileSync(f4, 'V4\n') });
+  await call(env, {
+    tool: 'patch',
+    input: { patch: `*** Begin Patch\n*** Update File: ${f5}\n@@\n-v5\n+V5\n*** End Patch` },
+    run: () => writeFileSync(f5, 'V5\n'),
+  });
+
+  assert.equal(text(entryOf(env, f1)?.base), 'v1\n');
+  assert.equal(text(entryOf(env, f2)?.base), 'v2\n');
+  assert.equal(text(entryOf(env, f3)?.base), 'v3\n');
+  assert.equal(text(entryOf(env, f4)?.base), 'v4\n');
+  assert.equal(text(entryOf(env, f5)?.base), 'v5\n');
+});
+
+test('patchPaths strips surrounding quotes from header paths', () => {
+  const body = [
+    '*** Begin Patch',
+    '*** Add File: "quoted name.txt"',
+    "*** Update File: 'single quoted.txt'",
+    '*** Delete File: plain.txt',
+    '*** End Patch',
+  ];
+  assert.deepEqual(patchPaths(body.join('\n')), ['quoted name.txt', 'single quoted.txt', 'plain.txt']);
+});
