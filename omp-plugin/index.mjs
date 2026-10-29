@@ -280,6 +280,32 @@ export function hashlinePaths(text) {
 }
 
 /**
+ * Paths a sloppy body names, read as OMP's parser reads a header: `*** Edit File: path` in any case,
+ * with an optional trailing ` all`, and a path that would be ambiguous written in JSON quotes. A
+ * header without a path continues the file before it. Lines between headers are unprefixed file text.
+ * @param {unknown} text
+ * @returns {string[]}
+ */
+export function sloppyPaths(text) {
+  if (typeof text !== 'string') return [];
+  return text.split('\n').flatMap((line) => {
+    const header = /^\*{3}[ \t]+Edit[ \t]+File(?::|[ \t]|$)[ \t]*(.*)$/i.exec(line.trim());
+    if (header === null) return [];
+    const rest = header[1].trim();
+    const flagged = /^([\s\S]*)\s(\S*)$/.exec(rest);
+    let path = /^all$/i.test(rest) ? '' : flagged !== null && /^all$/i.test(flagged[2]) ? flagged[1].trimEnd() : rest;
+    if (path.startsWith('"')) {
+      try {
+        path = JSON.parse(path);
+      } catch {
+        return [];
+      }
+    }
+    return path === '' ? [] : [path];
+  });
+}
+
+/**
  * Resolves a tool's path the way OMP's file tools do: against the folder the session was started
  * in, a leading `~` meaning the home folder.
  * @param {string} directory
@@ -303,15 +329,22 @@ export function editedPaths(tool, input, directory, home = homedir()) {
   const fields = /** @type {Record<string, unknown>} */ (input !== null && typeof input === 'object' ? input : {});
   /** @type {string[]} */
   const named = [];
-  if (typeof fields.path === 'string') named.push(fields.path);
-  if (Array.isArray(fields.edits)) {
-    for (const edit of fields.edits) {
-      if (edit !== null && typeof edit === 'object' && typeof /** @type {{ rename?: unknown }} */ (edit).rename === 'string') {
-        named.push(/** @type {{ rename: string }} */ (edit).rename);
+  if (typeof fields.input === 'string') {
+    // A mode that takes a body takes nothing else, so the body names every file. OMP adds a `path`
+    // from its scan for hashline headers, which a sloppy body's text such as `[section]` also
+    // matches. A hunk's context line can look like a hashline header as well.
+    const headed = [...patchPaths(fields.input), ...sloppyPaths(fields.input)];
+    named.push(...(headed.length > 0 ? headed : hashlinePaths(fields.input)));
+  } else {
+    if (typeof fields.path === 'string') named.push(fields.path);
+    if (Array.isArray(fields.edits)) {
+      for (const edit of fields.edits) {
+        if (edit !== null && typeof edit === 'object' && typeof /** @type {{ rename?: unknown }} */ (edit).rename === 'string') {
+          named.push(/** @type {{ rename: string }} */ (edit).rename);
+        }
       }
     }
   }
-  if (typeof fields.input === 'string') named.push(...patchPaths(fields.input), ...hashlinePaths(fields.input));
   // local:// and conflict:// are OMP's own scratch, not files the editor is reviewing.
   const resolved = named.filter((path) => path !== '' && !path.includes('://')).map((path) => resolveTarget(directory, path, home));
   return Array.from(new Set(resolved));

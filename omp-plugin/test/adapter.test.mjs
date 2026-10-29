@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { openStore } from '../../claude-plugin/store.mjs';
 import { tempDir } from '../../claude-plugin/test/helpers.mjs';
-import clause, { editedPaths, hashlinePaths, patchPaths, resolveTarget, runHook } from '../index.mjs';
+import clause, { editedPaths, hashlinePaths, patchPaths, resolveTarget, runHook, sloppyPaths } from '../index.mjs';
 
 /**
  * Loads the extension against a stand-in for OMP and a scratch store. The extension starts the real
@@ -326,6 +326,54 @@ test('hashlinePaths and patchPaths list the files a body names', () => {
   assert.deepEqual(patchPaths('*** Add File: '), []);
 });
 
+test('sloppyPaths lists the files a sloppy body names', () => {
+  const body = [
+    '*** Begin Patch',
+    '*** Edit File: src/a.ts',
+    '*** Find',
+    'old',
+    '*** Replace',
+    'new',
+    '*** Edit File:',
+    '*** Find',
+    'more',
+    '*** Replace',
+    'less',
+    '*** edit file: b.ts all',
+    '*** Find',
+    'x',
+    '*** Insert After',
+    'y',
+    '*** Edit File: " all " all',
+    '*** Find',
+    'p',
+    '*** Replace',
+    'q',
+    '*** Edit File c.ts',
+    '*** Find',
+    'r',
+    '*** Replace',
+    's',
+    '*** End Patch',
+  ];
+  assert.deepEqual(sloppyPaths(body.join('\n')), ['src/a.ts', 'b.ts', ' all ', 'c.ts']);
+  assert.deepEqual(sloppyPaths(body.join('\r\n')), ['src/a.ts', 'b.ts', ' all ', 'c.ts']);
+  assert.deepEqual(sloppyPaths('*** Edit File: all\n*** Edit File: "unclosed\n*** Edit Files: d.ts\n[e.ts]'), []);
+});
+
+test('editedPaths reads a body with the parser for its own format', () => {
+  // A hunk's context line and a raw sloppy line look like hashline `[path]` headers. For the sloppy
+  // body, OMP's own scan for those headers also puts the line in `path`.
+  const patch = ['*** Begin Patch', '*** Update File: Cargo.toml', '@@', ' [dependencies]', '-a = "1"', '+a = "2"', '*** End Patch'];
+  assert.deepEqual(editedPaths('edit', { input: patch.join('\n') }, '/work'), ['/work/Cargo.toml']);
+
+  const sloppy = ['*** Edit File: setup.cfg', '*** Find', '[metadata]', '*** Insert After', 'name = x'];
+  assert.deepEqual(editedPaths('edit', { input: sloppy.join('\n'), path: 'metadata', paths: ['metadata'] }, '/work'), ['/work/setup.cfg']);
+
+  const hashline = ['*** Begin Patch', '[src/a.ts#1A2B]', 'PUT 1:', '+[x]', '*** End Patch'];
+  assert.deepEqual(editedPaths('edit', { input: hashline.join('\n'), path: 'src/a.ts', paths: ['src/a.ts'] }, '/work'), ['/work/src/a.ts']);
+});
+
 test('resolveTarget resolves a tool path against the session folder', () => {
   assert.equal(resolveTarget('/work', 'a/b.txt', '/home/u'), '/work/a/b.txt');
   assert.equal(resolveTarget('/work', '/abs/c.txt', '/home/u'), '/abs/c.txt');
@@ -336,7 +384,7 @@ test('resolveTarget resolves a tool path against the session folder', () => {
 
 test('editedPaths ignores tools and urls that are not workspace files', () => {
   assert.deepEqual(editedPaths('bash', { command: 'rm x' }, '/work'), []);
-  assert.deepEqual(editedPaths('edit', { path: 'local://PLAN.md', input: '[real.ts#ABCD]\n' }, '/work'), ['/work/real.ts']);
+  assert.deepEqual(editedPaths('edit', { input: '[local://PLAN.md#ABCD]\n[real.ts#ABCD]\n' }, '/work'), ['/work/real.ts']);
   assert.deepEqual(editedPaths('edit', { path: 'conflict://1' }, '/work'), []);
   assert.deepEqual(editedPaths('read', { path: 'a.txt' }, '/work'), []);
 });

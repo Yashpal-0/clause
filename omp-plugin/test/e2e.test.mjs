@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { test } from 'node:test';
@@ -22,11 +22,13 @@ const skip = spawnSync(OMP, ['--version'], { stdio: 'ignore' }).status === 0 ? f
 const text = (/** @type {Buffer | null | undefined} */ bytes) => bytes?.toString('utf8');
 
 /**
- * A scripted model. A prompt that asks for the edit calls `write`. A tool result ends the turn.
- * Requests with no tools (a title, a side question) get plain text.
+ * A scripted model. A prompt to replace the file calls `write`, and one to edit it calls `edit` with
+ * `editInput`, the body an edit mode that takes one is given. A tool result ends the turn. Requests
+ * with no tools (a title, a side question) get plain text.
  * @param {import('node:test').TestContext} t
+ * @param {string} [editInput]
  */
-function fakeModel(t) {
+function fakeModel(t, editInput) {
   /** @type {string[]} */
   const seen = [];
   const server = createServer((req, res) => {
@@ -50,7 +52,7 @@ function fakeModel(t) {
       const tools = Array.isArray(body.tools) ? body.tools.map((tool) => tool?.function?.name).filter((name) => typeof name === 'string') : [];
       const transcript = messages.map((message) => messageText(message?.content)).join('\n');
       seen.push(transcript);
-      const reply = replyFor(last, tools);
+      const reply = replyFor(last, tools, editInput);
       const payload = body.stream ? streamOf(reply) : JSON.stringify(completionOf(reply));
       res.writeHead(200, { 'content-type': body.stream ? 'text/event-stream' : 'application/json' });
       res.end(payload);
@@ -77,13 +79,18 @@ function messageText(content) {
 /**
  * @param {{ role?: string, content?: unknown }} last
  * @param {string[]} tools
+ * @param {string} [editInput]
  * @returns {{ text: string } | { tool: string, args: Record<string, unknown> }}
  */
-function replyFor(last, tools) {
+function replyFor(last, tools, editInput) {
   if (last.role === 'tool') return { text: 'done' };
   // The last message, not the transcript: a later prompt in the same session must not write again.
-  if (tools.includes('write') && messageText(last.content).includes('replace the file')) {
+  const asked = messageText(last.content);
+  if (tools.includes('write') && asked.includes('replace the file')) {
     return { tool: 'write', args: { path: 'a.txt', content: 'new\n' } };
+  }
+  if (tools.includes('edit') && editInput !== undefined && asked.includes('edit the file')) {
+    return { tool: 'edit', args: { input: editInput } };
   }
   return { text: 'pong' };
 }
@@ -127,8 +134,9 @@ function streamOf(reply) {
 
 /**
  * @param {import('node:test').TestContext} t
+ * @param {{ mode: string, input: string }} [edit] the edit mode OMP runs in, and the body the model sends
  */
-async function sandbox(t) {
+async function sandbox(t, edit) {
   const base = tempDir(t, 'omp-e2e-');
   const home = join(base, 'home');
   const project = join(base, 'project');
@@ -137,7 +145,7 @@ async function sandbox(t) {
   mkdirSync(agentDir, { recursive: true });
   mkdirSync(project, { recursive: true });
   writeFileSync(join(project, 'a.txt'), 'old\n');
-  const model = await fakeModel(t);
+  const model = await fakeModel(t, edit?.input);
   writeFileSync(
     join(agentDir, 'models.yml'),
     [
@@ -166,6 +174,7 @@ async function sandbox(t) {
     PI_NO_TITLE: '1',
     CLAUDE_PENDING_EDITS_DIR: storeDir,
     LANG: process.env.LANG ?? 'C.UTF-8',
+    ...(edit === undefined ? {} : { PI_EDIT_VARIANT: edit.mode }),
   };
   return { project, storeDir, model, env };
 }
@@ -276,6 +285,29 @@ test('an OMP write becomes pending from the exact pre-edit bytes', { skip, timeo
   assert.equal(entry?.existed, true);
   assert.deepEqual(entry?.sessionDirs, [box.project]);
 });
+
+// Each body edits a file with a `[build]` line next to a `build` folder. Read as a hashline header,
+// that line names the folder, and the hook logs that the folder is not a regular file.
+const bodyEdits = {
+  apply_patch: '*** Begin Patch\n*** Update File: a.txt\n@@\n [build]\n-old\n+new\n*** End Patch\n',
+  sloppy: '*** Edit File: a.txt\n*** Find\n[build]\nold\n*** Replace\n[build]\nnew\n',
+};
+for (const [mode, input] of Object.entries(bodyEdits)) {
+  test(`an OMP edit in ${mode} mode is pending for the file it names, and only that file`, { skip, timeout: 90_000 }, async (t) => {
+    const box = await sandbox(t, { mode, input });
+    const file = join(box.project, 'a.txt');
+    writeFileSync(file, '[build]\nold\n');
+    mkdirSync(join(box.project, 'build'));
+    const run = await runOmp(box, [...launch, '--no-session', 'edit the file']);
+
+    const store = openStore(box.storeDir);
+    const errors = join(box.storeDir, 'errors.log');
+    assert.equal(run.code, 0, `omp exited ${run.code}\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}\nseen:\n${run.seen}`);
+    assert.equal(readFileSync(file, 'utf8'), '[build]\nnew\n');
+    assert.equal(text(store.readEntry(store.idFor(file))?.base), '[build]\nold\n');
+    assert.equal(existsSync(errors) ? readFileSync(errors, 'utf8') : '', '');
+  });
+}
 
 test('a discard is told to the same OMP session on its next prompt', { skip, timeout: 90_000 }, async (t) => {
   const box = await sandbox(t);
