@@ -22,13 +22,21 @@ const skip = spawnSync(OMP, ['--version'], { stdio: 'ignore' }).status === 0 ? f
 const text = (/** @type {Buffer | null | undefined} */ bytes) => bytes?.toString('utf8');
 
 /**
- * A scripted model. A prompt to replace the file calls `write`, and one to edit it calls `edit` with
- * `editInput`, the body an edit mode that takes one is given. A tool result ends the turn. Requests
- * with no tools (a title, a side question) get plain text.
- * @param {import('node:test').TestContext} t
- * @param {string} [editInput]
+ * @typedef {object} BodyEdit an edit in a mode whose tool takes a body
+ * @property {string} mode the edit mode OMP runs in
+ * @property {string} input the body the model sends
+ * @property {string} [read] a file the model reads first, putting the tag `read` shows for it in
+ *   place of `{tag}` in the body, as a hashline edit must
  */
-function fakeModel(t, editInput) {
+
+/**
+ * A scripted model. A prompt to replace the file calls `write`, and one to edit it calls `edit` with
+ * the body of `edit`. A tool result other than that read ends the turn. Requests with no tools (a
+ * title, a side question) get plain text.
+ * @param {import('node:test').TestContext} t
+ * @param {BodyEdit} [edit]
+ */
+function fakeModel(t, edit) {
   /** @type {string[]} */
   const seen = [];
   const server = createServer((req, res) => {
@@ -52,7 +60,7 @@ function fakeModel(t, editInput) {
       const tools = Array.isArray(body.tools) ? body.tools.map((tool) => tool?.function?.name).filter((name) => typeof name === 'string') : [];
       const transcript = messages.map((message) => messageText(message?.content)).join('\n');
       seen.push(transcript);
-      const reply = replyFor(last, tools, editInput);
+      const reply = replyFor(last, tools, edit);
       const payload = body.stream ? streamOf(reply) : JSON.stringify(completionOf(reply));
       res.writeHead(200, { 'content-type': body.stream ? 'text/event-stream' : 'application/json' });
       res.end(payload);
@@ -77,20 +85,24 @@ function messageText(content) {
 }
 
 /**
- * @param {{ role?: string, content?: unknown }} last
+ * @param {{ role?: string, content?: unknown, tool_call_id?: string }} last
  * @param {string[]} tools
- * @param {string} [editInput]
+ * @param {BodyEdit} [edit]
  * @returns {{ text: string } | { tool: string, args: Record<string, unknown> }}
  */
-function replyFor(last, tools, editInput) {
-  if (last.role === 'tool') return { text: 'done' };
+function replyFor(last, tools, edit) {
+  if (last.role === 'tool') {
+    if (edit?.read === undefined || last.tool_call_id !== 'call_read') return { text: 'done' };
+    const tag = /#([0-9A-F]{4})\]/.exec(messageText(last.content))?.[1] ?? 'none';
+    return { tool: 'edit', args: { input: edit.input.replace('{tag}', tag) } };
+  }
   // The last message, not the transcript: a later prompt in the same session must not write again.
   const asked = messageText(last.content);
   if (tools.includes('write') && asked.includes('replace the file')) {
     return { tool: 'write', args: { path: 'a.txt', content: 'new\n' } };
   }
-  if (tools.includes('edit') && editInput !== undefined && asked.includes('edit the file')) {
-    return { tool: 'edit', args: { input: editInput } };
+  if (tools.includes('edit') && edit !== undefined && asked.includes('edit the file')) {
+    return edit.read === undefined ? { tool: 'edit', args: { input: edit.input } } : { tool: 'read', args: { path: edit.read } };
   }
   return { text: 'pong' };
 }
@@ -134,7 +146,7 @@ function streamOf(reply) {
 
 /**
  * @param {import('node:test').TestContext} t
- * @param {{ mode: string, input: string }} [edit] the edit mode OMP runs in, and the body the model sends
+ * @param {BodyEdit} [edit]
  */
 async function sandbox(t, edit) {
   const base = tempDir(t, 'omp-e2e-');
@@ -145,7 +157,7 @@ async function sandbox(t, edit) {
   mkdirSync(agentDir, { recursive: true });
   mkdirSync(project, { recursive: true });
   writeFileSync(join(project, 'a.txt'), 'old\n');
-  const model = await fakeModel(t, edit?.input);
+  const model = await fakeModel(t, edit);
   writeFileSync(
     join(agentDir, 'models.yml'),
     [
@@ -308,6 +320,23 @@ for (const [mode, input] of Object.entries(bodyEdits)) {
     assert.equal(existsSync(errors) ? readFileSync(errors, 'utf8') : '', '');
   });
 }
+
+test('an OMP hashline edit is pending for the quoted file it names and the quoted file it moves to', { skip, timeout: 90_000 }, async (t) => {
+  // `read` shows the header unquoted. OMP also takes the path in quotes, and asks for a destination
+  // with a space to be quoted.
+  const box = await sandbox(t, { mode: 'hashline', read: 'a b.txt', input: '["a b.txt"#{tag}]\nPUT 1.=1:\n+new\nMV "c d.txt"\n' });
+  const source = join(box.project, 'a b.txt');
+  const destination = join(box.project, 'c d.txt');
+  writeFileSync(source, 'old\n');
+  const run = await runOmp(box, [...launch, '--no-session', 'edit the file']);
+
+  const store = openStore(box.storeDir);
+  assert.equal(run.code, 0, `omp exited ${run.code}\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}\nseen:\n${run.seen}`);
+  assert.equal(existsSync(destination) && readFileSync(destination, 'utf8'), 'new\n', `the edit did not land\nseen:\n${run.seen}`);
+  assert.equal(existsSync(source), false);
+  assert.equal(text(store.readEntry(store.idFor(source))?.base), 'old\n');
+  assert.equal(store.readEntry(store.idFor(destination))?.existed, false);
+});
 
 test('a discard is told to the same OMP session on its next prompt', { skip, timeout: 90_000 }, async (t) => {
   const box = await sandbox(t);

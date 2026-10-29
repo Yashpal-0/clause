@@ -425,8 +425,9 @@ first, which can be git.
 - `edit` and `write` are tracked, in every shape those tools take: replace, patch (including a
   rename), apply-patch, hashline and sloppy. Checked against OMP 18.13.3 on Linux. The unit tests
   drive the hook with OMP's event shapes. The end-to-end tests load this plugin in the real `omp`,
-  with a scripted model: a write, an apply-patch edit and a sloppy edit are each pending from the
-  pre-edit bytes, and a discard is in the next prompt of that same session. No Windows run.
+  with a scripted model: a write, an apply-patch edit, a sloppy edit and a hashline edit that
+  moves its file are each pending from the pre-edit bytes, and a discard is in the next prompt of
+  that same session. No Windows run.
 - A write OMP hands to the VS Code editor uses that same pair of events. OMP does not return from
   the write until the editor has saved, so the hook compares the bytes from before the call with
   the bytes the editor saved, format-on-save included. An end-to-end test runs `omp acp` behind a

@@ -326,6 +326,11 @@ test('hashlinePaths and patchPaths list the files a body names', () => {
   assert.deepEqual(patchPaths('*** Add File: '), []);
 });
 
+test('hashlinePaths cleans a path the way OMP does before it edits the file', () => {
+  const body = ['[app/[slug]/page.tsx#1A2B]', 'MV "e f.tsx"', '[*** Begin Patch] [g.ts#1A2B]', '[*** Update File: h.ts#1a2b ]', '[*** End Patch]'];
+  assert.deepEqual(hashlinePaths(body.join('\n')), ['app/[slug]/page.tsx', 'e f.tsx', 'g.ts', 'h.ts']);
+});
+
 test('sloppyPaths lists the files a sloppy body names', () => {
   const body = [
     '*** Begin Patch',
@@ -372,6 +377,9 @@ test('editedPaths reads a body with the parser for its own format', () => {
 
   const hashline = ['*** Begin Patch', '[src/a.ts#1A2B]', 'PUT 1:', '+[x]', '*** End Patch'];
   assert.deepEqual(editedPaths('edit', { input: hashline.join('\n'), path: 'src/a.ts', paths: ['src/a.ts'] }, '/work'), ['/work/src/a.ts']);
+
+  // OMP edits the file without the quotes. Its `path` hint for the same header is not read for a body.
+  assert.deepEqual(editedPaths('edit', { input: '["a b.ts"#1A2B]\nPUT 1:\n+x\nMV \'c d.ts\'\n', path: 'a b.ts' }, '/work'), ['/work/a b.ts', '/work/c d.ts']);
 });
 
 test('resolveTarget resolves a tool path against the session folder', () => {

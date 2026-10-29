@@ -63,6 +63,18 @@ const PARALLEL_HOOKS = 4;
 const PATCH_HEADERS = ['*** Add File: ', '*** Delete File: ', '*** Update File: ', '*** Move to: '];
 
 /**
+ * apply-patch framing that a model put in brackets in front of a hashline header
+ * (`[*** Begin Patch] [a.ts#1A2B]`). OMP drops it, as `unbracket_envelope_markers` does.
+ */
+const HASHLINE_ENVELOPE = /^(?:\[\s*\*\*\* (?:Begin Patch|End Patch|Abort)\s*\]?\s*)+/;
+
+/** An apply-patch label in front of a hashline path (`*** Update File: a.ts`). OMP's APPLY_PATCH_PATH_NOISE_RE. */
+const HASHLINE_PATH_LABEL = /^\*{0,3}\s*(?:(?:update|add|delete|move)[^A-Za-z0-9]*(?:file|to)?[^A-Za-z0-9]*:)?\s*\*{0,3}\s*/i;
+
+/** `text` without one pair of matching quotes around it, as OMP's hashline parser takes them off. */
+const unquote = (/** @type {string} */ text) => (/^(["']).*\1$/s.test(text) ? text.slice(1, -1) : text);
+
+/**
  * @typedef {object} OmpContext the part of OMP's handler context that is used
  * @property {string} cwd
  * @property {{ notify?: (message: string, type?: 'info' | 'warning' | 'error') => void }} [ui]
@@ -253,30 +265,27 @@ export function patchPaths(patchText) {
 }
 
 /**
- * Paths a hashline body names. A file header is a line `[path]` or `[path#HASH]` (the hash is four
- * hex characters). `MV dest` names the file a move writes. Payload lines are prefixed, so a line of
- * the file's own text does not match.
+ * Paths a hashline body names, cleaned the way OMP's parser cleans them before it edits the file. A
+ * file header is a line `[path]` or `[path#HASH]` (the hash is four hex characters); the path runs
+ * to the line's last `]`, so it may contain brackets (`app/[slug]/page.tsx`). `MV dest` names the
+ * file a move writes. Either path may be in quotes. Payload lines are prefixed, so a line of the
+ * file's own text does not match. Lines OMP would reject still count: naming a file the edit
+ * leaves alone records nothing, and missing one loses its review.
  * @param {unknown} text
  * @returns {string[]}
  */
 export function hashlinePaths(text) {
   if (typeof text !== 'string') return [];
-  /** @type {string[]} */
-  const paths = [];
-  for (const rawLine of text.split('\n')) {
-    const line = rawLine.replace(/\r$/, '');
-    const header = /^\s*\[([^\]\r\n]+)\]\s*$/.exec(line);
-    if (header !== null) {
-      let path = header[1].trim();
-      const hashAt = path.lastIndexOf('#');
-      if (hashAt !== -1 && /^[0-9a-fA-F]{4,}$/.test(path.slice(hashAt + 1))) path = path.slice(0, hashAt).trim();
-      if (path !== '') paths.push(path);
-      continue;
-    }
-    const move = /^\s*MV\s+(\S.*?)\s*$/.exec(line);
-    if (move !== null && move[1].trim() !== '') paths.push(move[1].trim());
-  }
-  return paths;
+  return text.split('\n').flatMap((rawLine) => {
+    const line = rawLine.trim().replace(HASHLINE_ENVELOPE, '');
+    let named;
+    if (line.startsWith('[') && line.endsWith(']')) named = line.slice(1, -1).replace(/#[0-9a-fA-F]{4}\s*$/, '');
+    // OMP reads `MV` followed by the end of the line, `:` or a space, and unquotes the rest once more.
+    else if (/^MV(?![^:\s])/.test(line)) named = unquote(line.slice(2).trim());
+    else return [];
+    const path = unquote(named.trim()).replace(HASHLINE_PATH_LABEL, '');
+    return path === '' ? [] : [path];
+  });
 }
 
 /**
