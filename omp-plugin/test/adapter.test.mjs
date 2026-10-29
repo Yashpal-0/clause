@@ -387,12 +387,28 @@ test('resolveTarget resolves a tool path against the session folder', () => {
   assert.equal(resolveTarget('/work', '/abs/c.txt', '/home/u'), '/abs/c.txt');
   assert.equal(resolveTarget('/work', '~', '/home/u'), '/home/u');
   assert.equal(resolveTarget('/work', '~/d.txt', '/home/u'), '/home/u/d.txt');
-  assert.equal(resolveTarget('/work', '~other/e.txt', '/home/u'), '/work/~other/e.txt');
+  // OMP reads `~name` as a folder in the home folder, not as another user's home.
+  assert.equal(resolveTarget('/work', '~other/e.txt', '/home/u'), '/home/u/other/e.txt');
+});
+
+test('resolveTarget reads a path the way OMP does before it changes the file', () => {
+  // A `read` header pasted as the path, and the stray marks models put in front of a path.
+  assert.equal(resolveTarget('/work', '[a/b.txt#1A2B]', '/home/u'), '/work/a/b.txt');
+  assert.equal(resolveTarget('/work', '[a#b.txt]', '/home/u'), '/work/[a#b.txt]');
+  assert.equal(resolveTarget('/work', ':/abs/c.txt', '/home/u'), '/abs/c.txt');
+  assert.equal(resolveTarget('/work', ':./c.txt', '/home/u'), '/work/c.txt');
+  assert.equal(resolveTarget('/work', '@/abs/c.txt', '/home/u'), '/abs/c.txt');
+  assert.equal(resolveTarget('/work', '@~/d.txt', '/home/u'), '/home/u/d.txt');
+  assert.equal(resolveTarget('/work', '@f.txt', '/home/u'), '/work/@f.txt');
+  assert.equal(resolveTarget('/work', 'file:///abs/a%20b.txt', '/home/u'), '/abs/a b.txt');
+  assert.equal(resolveTarget('/work', 'a\u00a0b.txt', '/home/u'), '/work/a b.txt');
+  assert.equal(resolveTarget('/work', '[local://PLAN.md#ABCD]', '/home/u'), undefined);
 });
 
 test('editedPaths ignores tools and urls that are not workspace files', () => {
   assert.deepEqual(editedPaths('bash', { command: 'rm x' }, '/work'), []);
   assert.deepEqual(editedPaths('edit', { input: '[local://PLAN.md#ABCD]\n[real.ts#ABCD]\n' }, '/work'), ['/work/real.ts']);
   assert.deepEqual(editedPaths('edit', { path: 'conflict://1' }, '/work'), []);
+  assert.deepEqual(editedPaths('edit', { path: 'file:///abs/a.ts', old_string: 'a', new_string: 'b' }, '/work'), ['/abs/a.ts']);
   assert.deepEqual(editedPaths('read', { path: 'a.txt' }, '/work'), []);
 });

@@ -24,7 +24,7 @@ const text = (/** @type {Buffer | null | undefined} */ bytes) => bytes?.toString
 /**
  * @typedef {object} BodyEdit an edit in a mode whose tool takes a body
  * @property {string} mode the edit mode OMP runs in
- * @property {string} input the body the model sends
+ * @property {string} input the body the model sends, with the project folder in place of `{project}`
  * @property {string} [read] a file the model reads first, putting the tag `read` shows for it in
  *   place of `{tag}` in the body, as a hashline edit must
  */
@@ -157,7 +157,7 @@ async function sandbox(t, edit) {
   mkdirSync(agentDir, { recursive: true });
   mkdirSync(project, { recursive: true });
   writeFileSync(join(project, 'a.txt'), 'old\n');
-  const model = await fakeModel(t, edit);
+  const model = await fakeModel(t, edit && { ...edit, input: edit.input.replaceAll('{project}', project) });
   writeFileSync(
     join(agentDir, 'models.yml'),
     [
@@ -318,6 +318,27 @@ for (const [mode, input] of Object.entries(bodyEdits)) {
     assert.equal(readFileSync(file, 'utf8'), '[build]\nnew\n');
     assert.equal(text(store.readEntry(store.idFor(file))?.base), '[build]\nold\n');
     assert.equal(existsSync(errors) ? readFileSync(errors, 'utf8') : '', '');
+  });
+}
+
+// Paths OMP's edit tool reads as `a.txt`: a `read` header pasted as the path, and the stray marks
+// models put in front of a path.
+const pathForms = {
+  'a pasted read header': '[a.txt#1A2B]',
+  'a stray colon': ':./a.txt',
+  'a stray @': '@{project}/a.txt',
+  'a file URL': 'file://{project}/a.txt',
+};
+for (const [form, path] of Object.entries(pathForms)) {
+  test(`an OMP edit of ${form} is pending for the file OMP edits`, { skip, timeout: 90_000 }, async (t) => {
+    const box = await sandbox(t, { mode: 'apply_patch', input: `*** Begin Patch\n*** Update File: ${path}\n@@\n-old\n+new\n*** End Patch\n` });
+    const file = join(box.project, 'a.txt');
+    const run = await runOmp(box, [...launch, '--no-session', 'edit the file']);
+
+    const store = openStore(box.storeDir);
+    assert.equal(run.code, 0, `omp exited ${run.code}\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}\nseen:\n${run.seen}`);
+    assert.equal(readFileSync(file, 'utf8'), 'new\n', `OMP did not edit a.txt\nseen:\n${run.seen}`);
+    assert.equal(text(store.readEntry(store.idFor(file))?.base), 'old\n');
   });
 }
 

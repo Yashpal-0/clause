@@ -315,15 +315,45 @@ export function sloppyPaths(text) {
 }
 
 /**
- * Resolves a tool's path the way OMP's file tools do: against the folder the session was started
- * in, a leading `~` meaning the home folder.
+ * `path` without the `[path#TAG]` wrapper `read` shows around a file's path, which models paste as a
+ * path. As in OMP, a wrapper whose last `#` is not followed by four hex digits is kept as written.
+ * @param {string} path
+ */
+function unwrapReadHeader(path) {
+  const trimmed = path.trimEnd();
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return path;
+  const inner = trimmed.slice(1, -1);
+  const hashAt = inner.lastIndexOf('#');
+  const bare = hashAt === -1 ? inner : /^[0-9a-fA-F]{4}$/.test(inner.slice(hashAt + 1)) ? inner.slice(0, hashAt) : '';
+  return bare === '' ? path : bare;
+}
+
+/**
+ * The file OMP changes for a path the model gave, read the way OMP's edit and write tools read it
+ * (pi-edit path_policy.rs): a pasted `read` header stands for its path, a stray `:` or `@` in front
+ * of an absolute or home path is dropped, a `file://` URL is decoded, other spaces are plain spaces,
+ * a leading `~` is the home folder, and the rest is relative to the folder the session started in.
  * @param {string} directory
  * @param {string} path
  * @param {string} [home]
+ * @returns {string | undefined} `undefined` for an internal URL: `local://` and `conflict://` are
+ *   OMP's own scratch, not files the editor is reviewing
  */
 export function resolveTarget(directory, path, home = homedir()) {
-  const expanded = path === '~' ? home : path.startsWith('~/') ? join(home, path.slice(2)) : path;
-  return resolve(directory, expanded);
+  let target = unwrapReadHeader(path);
+  if (target.includes('://') && !/^file:\/\//i.test(target)) return undefined;
+  target = target
+    .replace(/^:(?=[/\\~]|\.\.?[/\\]|[A-Za-z]:)/, '')
+    .replace(/^@(?=[/\\]|~$|~[/\\]|[A-Za-z]:)/, '')
+    .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
+  if (/^file:\/\//i.test(target)) {
+    try {
+      target = decodeURIComponent(target.slice('file://'.length));
+    } catch {
+      // OMP keeps a URL whose escapes do not decode as it is.
+    }
+  }
+  return resolve(directory, target.startsWith('~') ? join(home, target.slice(1)) : target);
 }
 
 /**
@@ -354,8 +384,10 @@ export function editedPaths(tool, input, directory, home = homedir()) {
       }
     }
   }
-  // local:// and conflict:// are OMP's own scratch, not files the editor is reviewing.
-  const resolved = named.filter((path) => path !== '' && !path.includes('://')).map((path) => resolveTarget(directory, path, home));
+  const resolved = named.flatMap((path) => {
+    const target = path === '' ? undefined : resolveTarget(directory, path, home);
+    return target === undefined ? [] : [target];
+  });
   return Array.from(new Set(resolved));
 }
 
