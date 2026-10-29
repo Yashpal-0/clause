@@ -10,12 +10,14 @@ Claude writes straight to disk, at full speed. Clause keeps each of those change
 inline in your editor, until you **Keep** it or **Discard** it: one block, one file, or all at
 once. Close Claude, close the editor, reboot. Your review is right where you left it.
 
-It works with Claude Code and, through a second small plugin, with [OpenCode](https://opencode.ai)
-2.x.
+It works with Claude Code, with [OpenCode](https://opencode.ai) 2.x, and with
+[OMP](https://github.com/can1357/oh-my-pi). The review is the same extension in VS Code or Cursor,
+including a write OMP hands to the VS Code editor.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![VS Code 1.100+ and Cursor](https://img.shields.io/badge/VS%20Code%201.100%2B%20%7C%20Cursor-extension-007ACC?logo=visualstudiocode&logoColor=white)](#quick-start)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8957E5.svg)](#quick-start)
+[![OMP plugin](https://img.shields.io/badge/OMP-plugin-111111.svg)](#quick-start)
 [![Plugin dependencies: 0](https://img.shields.io/badge/plugin%20dependencies-0-brightgreen.svg)](claude-plugin/)
 
 <sub>An independent open-source project. Not affiliated with or endorsed by Anthropic.</sub>
@@ -57,7 +59,7 @@ sign. Hence the name.
 
 - **Survives everything.** Pending state lives in files on disk, not in a process. Quit Claude,
   close the editor, crash it, reboot: the same blocks come back.
-- **Claude hears about your Discards.** Your next prompt tells Claude which files lost changes, so
+- **The agent hears about your Discards.** Your next prompt tells it which files lost changes, so
   it re-reads them instead of building on code that is gone.
 - **Find every change at a glance.** A violet `◆` marks each file with pending changes in the file
   tree and on its tab, and the folders above it turn violet too. Git's letters stay where they are.
@@ -70,16 +72,16 @@ sign. Hence the name.
 
 ## Quick start
 
-You need Claude Code, Node.js on the `PATH` of the process that starts Claude Code, and VS Code
-1.100+ or Cursor. Details are under [Requirements](#requirements).
+You need Node.js on the `PATH` of the process that starts the agent, VS Code 1.100+ or Cursor, and
+Claude Code, OpenCode, or OMP. Details are under [Requirements](#requirements).
 
 **1. Install the extension**
 
-Download `clause-0.2.0.vsix` from the [latest release](https://github.com/Yashpal-0/clause/releases/latest), then:
+Download `clause-0.3.0.vsix` from the [latest release](https://github.com/Yashpal-0/clause/releases/latest), then:
 
 ```sh
-code --install-extension clause-0.2.0.vsix      # VS Code
-cursor --install-extension clause-0.2.0.vsix    # Cursor
+code --install-extension clause-0.3.0.vsix      # VS Code
+cursor --install-extension clause-0.3.0.vsix    # Cursor
 ```
 
 Or build the same file from source:
@@ -149,6 +151,21 @@ supported. If edits do not show up, look in OpenCode's log
 the usual cause is `node` missing from the `PATH` OpenCode runs with, and `CLAUSE_NODE` can name
 its full path.
 
+**6. Optional: OMP**
+
+Edits that [OMP](https://github.com/can1357/oh-my-pi) makes with `edit` or `write` go through the
+same review, in the same panel and bars. That includes a write OMP routes through the VS Code
+editor: OMP waits until the editor has saved, and the block is the difference from before that
+write. The plugin is this repository. It runs the hook in `claude-plugin/`, so `node` must be on
+the `PATH` OMP runs with, and `CLAUSE_NODE` can name its full path.
+
+```sh
+omp plugin install github:Yashpal-0/clause
+```
+
+Working from a clone instead? `omp plugin link /path/to/clause` works too. Start a new OMP session
+after installing. To update later, run `omp plugin upgrade clause`.
+
 ## Using it
 
 Put Claude Code in **accept edits** mode (Shift+Tab) to get the Cursor flow: it edits, you review
@@ -196,9 +213,8 @@ Rules worth knowing:
   place. Discarding all of it moves the file to the trash; it never deletes it outright, and on a
   system without a trash it refuses. `Ctrl+Z` cannot bring it back from there; the trash can.
 - A pending file that is deleted later shows as deleted. Discard recreates it from the baseline.
-- Nothing in the editor tells an OpenCode agent's edits from Claude's. A Discard is put to an
-  OpenCode session on its next prompt, as it is to a Claude one, and every session of either kind
-  that was started in a folder containing the file hears about it once.
+- Nothing in the editor tells an OpenCode or OMP edit from Claude's. A Discard is put to the next
+  prompt of every session, of any of them, that was started in a folder containing the file.
 - Notebooks, binary and non-UTF-8 files, and files over 2 MB get file-level Keep, Discard and Open
   diff only.
 - The panel lists the files inside this window's workspace folders, and under "Outside this
@@ -232,7 +248,7 @@ In every editor that shows a file with pending changes:
 - The status bar shows `Clause: 3 pending · 2 files`, which opens that view, and beside it
   **Review Next File**, a button that opens the next pending file wherever you are, with no editor
   open as well.
-- When Claude edits a file, the editor opens it at the changed block on its own, as a preview tab
+- When Claude, OpenCode or OMP edits a file, the editor opens it at the changed block on its own, as a preview tab
   and without taking keyboard focus. This is **Follow**; see Settings.
 - In the file tree and on editor tabs, a file with pending changes has a violet `◆` after its name
   and a violet name. The folders above it are violet too, with a dot when collapsed. Git's letters
@@ -240,16 +256,20 @@ In every editor that shows a file with pending changes:
 
 ## How it works
 
-Clause has two parts, and you need both:
+Clause has an editor half and an agent half, and you need both. The editor half is the same for
+every agent:
 
 - **`claude-plugin/`** is a Claude Code plugin. Its hooks save what each file looked like before
-  Claude's first change to it.
+  the first change to it. The OpenCode and OMP plugins call that same hook.
+- **`opencode-plugin/`** and **`omp-plugin/`** turn those agents' file tools into calls of the hook.
 - **`vscode-extension/`** is a VS Code and Cursor extension. It shows the difference between that
-  saved copy and the file as Keep/Discard blocks.
+  saved copy and the file as Keep/Discard blocks. A write OMP applies in the VS Code editor is
+  already on disk when the hook records it.
 
 ```
 Claude Code ──hooks──▶  ~/.claude/pending-edits/  ◀──watches──  VS Code / Cursor extension
- (plugin)               entries/<id>/{base,meta.json,touched,sessions}   blocks = diff(base, file)
+OpenCode    ──plugin─▶  entries/<id>/{base,meta.json,touched,sessions}
+OMP         ──plugin─▶  blocks = diff(base, file)
 ```
 
 - Before Claude changes a file for the first time, the plugin stores the file's exact bytes (the
@@ -400,6 +420,22 @@ first, which can be git.
   nothing is recorded.
 - A keystroke inside a block of a 20,000-line file takes about 100 ms to process.
 
+**OMP**
+
+- `edit` and `write` are tracked, in every shape those tools take: replace, patch (including a
+  rename), apply-patch and hashline. Checked against OMP 18.13.3 on Linux. The unit tests drive the
+  hook with OMP's event shapes. The end-to-end tests load this plugin in the real `omp`, with a
+  scripted model: a write is pending from the pre-edit bytes, and a discard is in the next prompt
+  of that same session. No Windows run.
+- A write OMP hands to the VS Code editor uses that same pair of events. OMP does not return from
+  the write until the editor has saved, so the hook compares the bytes from before the call with
+  the bytes the editor saved, format-on-save included. That path was not run against a live editor.
+- Not tracked: `bash`, `ast_edit` (it names globs, not the files it will change), and OMP's own
+  scratch (`local://`, `conflict://`). A `tool_call` handler that throws is swallowed, because OMP
+  would otherwise block the edit. A handler that runs longer than OMP's tool-call budget still
+  blocks it; a normal edit finishes in well under a second.
+- The note about discards is added on the next prompt. A revived subagent does not consume it.
+
 **OpenCode**
 
 - Only OpenCode 2.x is supported, the version that lists plugins under `plugins`. Checked against
@@ -438,8 +474,8 @@ path, and the kind of block with its line number, never content), and for each C
 plugin keeps how far it has read that log, which is how your next prompt can tell Claude what you
 discarded. Everything stays on your machine, in files and directories only you can read (modes 0600
 and 0700). Hook failures are written to `errors.log` in the same folder, without file contents.
-The OpenCode plugin uses the same store and sends nothing anywhere: it starts `node` on the hook
-and gives it the path of each edited file and the folder of the session.
+The OpenCode and OMP plugins use the same store and send nothing anywhere: each starts `node` on
+the hook and gives it the path of each edited file and the folder of the session.
 
 Deleting the folder clears all pending state. Every file keeps whatever it contains on disk.
 
@@ -454,6 +490,9 @@ Deleting the folder clears all pending state. Every file keeps whatever it conta
   clean test profile.
 - `git`, only for the optional shell-command tracking.
 - OpenCode 2.x, only for the OpenCode plugin (developed against 2.1.4).
+- OMP, only for the OMP plugin (developed against 18.13.3). The editor is still VS Code 1.100+ or
+  Cursor: OMP does not ship an editor of its own. When OMP is connected to VS Code, the extension
+  installed there is the one that shows the review.
 
 ## Uninstall
 
@@ -466,7 +505,7 @@ cursor --uninstall-extension clause.clause
 
 Then remove the `enable-proposed-api` entry from `~/.vscode/argv.json` and `~/.cursor/argv.json`,
 the `bashEditDiffEnabled` line from `~/.claude/settings.json` if you added it, the
-`opencode-plugin` entry from `plugins` in `~/.config/opencode/opencode.json` if you added it, and,
+`opencode-plugin` entry from `plugins` in `~/.config/opencode/opencode.json` if you added it, `omp plugin uninstall clause` if you installed the OMP plugin, and,
 if you want, `~/.claude/pending-edits/`.
 
 ## Development
@@ -475,6 +514,7 @@ if you want, `~/.claude/pending-edits/`.
 .claude-plugin/marketplace.json   the marketplace Claude Code installs from; points at claude-plugin/
 claude-plugin/                    hooks, store and reverse-diff: plain JavaScript with JSDoc types
 opencode-plugin/                  the OpenCode plugin: turns OpenCode's tool events into calls of the hook
+omp-plugin/                       the OMP plugin: turns OMP's edit and write events into calls of the hook
 vscode-extension/                 the extension: TypeScript, bundled by esbuild
 package.json, tsconfig.plugin.json  tooling for the plugin, kept outside claude-plugin/ because
                                   the marketplace copies that folder
@@ -493,6 +533,10 @@ own workspace, store and `HOME`, so the `argv.json` from step 2 of the install d
 a run allows. `.vscode-test.mjs` points at `/usr/share/code/code`; change that path if VS Code is
 installed elsewhere. Tests must never touch the real `~/.claude/pending-edits`, which is
 why `CLAUDE_PENDING_EDITS_DIR` exists.
+
+The OMP plugin's unit tests drive the real hook with the event shapes OMP sends. Its end-to-end
+tests (`omp-plugin/test/e2e.test.mjs`) run the real `omp` against a scripted model, and are skipped
+when it is not installed; `OMP_BIN` names a binary that is not on the `PATH`.
 
 The OpenCode plugin's end-to-end tests (`opencode-plugin/test/e2e.test.mjs`) run the real `opencode`
 binary in a private home against a scripted model, and are skipped when it is not installed;

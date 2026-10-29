@@ -1,0 +1,233 @@
+// Runs the real `omp` binary with this plugin loaded, against a scripted OpenAI-compatible model.
+// The unit tests cover the plugin's logic. This is the check that OMP actually loads the plugin,
+// emits tool_call before the write and tool_result after it, and that those events reach the hook.
+// Skipped when `omp` is not installed. OMP_BIN names a binary that is not on the PATH.
+
+import assert from 'node:assert/strict';
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { openStore } from '../../claude-plugin/store.mjs';
+import { tempDir } from '../../claude-plugin/test/helpers.mjs';
+
+const PLUGIN = join(dirname(dirname(fileURLToPath(import.meta.url))), 'index.mjs');
+const OMP = process.env.OMP_BIN || 'omp';
+const skip = spawnSync(OMP, ['--version'], { stdio: 'ignore' }).status === 0 ? false : 'omp is not installed (OMP_BIN names it)';
+
+const text = (/** @type {Buffer | null | undefined} */ bytes) => bytes?.toString('utf8');
+
+/**
+ * A scripted model. A prompt that asks for the edit calls `write`. A tool result ends the turn.
+ * Requests with no tools (a title, a side question) get plain text.
+ * @param {import('node:test').TestContext} t
+ */
+function fakeModel(t) {
+  /** @type {string[]} */
+  const seen = [];
+  const server = createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      const url = req.url ?? '';
+      if (url.endsWith('/models')) {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ object: 'list', data: [{ id: 'fake-model', object: 'model', owned_by: 'fake' }] }));
+        return;
+      }
+      if (!url.endsWith('/chat/completions')) {
+        res.writeHead(404);
+        res.end('not found');
+        return;
+      }
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const messages = Array.isArray(body.messages) ? body.messages : [];
+      const last = messages.at(-1) ?? {};
+      const tools = Array.isArray(body.tools) ? body.tools.map((tool) => tool?.function?.name).filter((name) => typeof name === 'string') : [];
+      const transcript = messages.map((message) => messageText(message?.content)).join('\n');
+      seen.push(transcript);
+      const reply = replyFor(last, tools, transcript);
+      const payload = body.stream ? streamOf(reply) : JSON.stringify(completionOf(reply));
+      res.writeHead(200, { 'content-type': body.stream ? 'text/event-stream' : 'application/json' });
+      res.end(payload);
+    });
+  });
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (address === null || typeof address === 'string') return reject(new Error('fake model has no port'));
+      t.after(() => new Promise((done) => server.close(() => done())));
+      resolve({ port: address.port, seen });
+    });
+  });
+}
+
+/** @param {unknown} content */
+function messageText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.map((part) => (part !== null && typeof part === 'object' && 'text' in part ? String(part.text) : '')).join('');
+}
+
+/**
+ * @param {{ role?: string }} last
+ * @param {string[]} tools
+ * @param {string} transcript
+ * @returns {{ text: string } | { tool: string, args: Record<string, unknown> }}
+ */
+function replyFor(last, tools, transcript) {
+  if (last.role === 'tool') return { text: 'done' };
+  if (tools.includes('write') && transcript.includes('replace the file')) {
+    return { tool: 'write', args: { path: 'a.txt', content: 'new\n' } };
+  }
+  return { text: 'pong' };
+}
+
+/** @param {{ text: string } | { tool: string, args: Record<string, unknown> }} reply */
+function completionOf(reply) {
+  const message = 'text' in reply
+    ? { role: 'assistant', content: reply.text }
+    : {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: `call_${reply.tool}`, type: 'function', function: { name: reply.tool, arguments: JSON.stringify(reply.args) } }],
+      };
+  return {
+    id: 'chatcmpl-fake',
+    object: 'chat.completion',
+    created: 0,
+    model: 'fake-model',
+    choices: [{ index: 0, message, finish_reason: 'text' in reply ? 'stop' : 'tool_calls' }],
+    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+  };
+}
+
+/** @param {{ text: string } | { tool: string, args: Record<string, unknown> }} reply */
+function streamOf(reply) {
+  const base = { id: 'chatcmpl-fake', object: 'chat.completion.chunk', created: 0, model: 'fake-model' };
+  const delta = 'text' in reply
+    ? { role: 'assistant', content: reply.text }
+    : {
+        role: 'assistant',
+        tool_calls: [{ index: 0, id: `call_${reply.tool}`, type: 'function', function: { name: reply.tool, arguments: JSON.stringify(reply.args) } }],
+      };
+  const finish = 'text' in reply ? 'stop' : 'tool_calls';
+  const chunks = [
+    { ...base, choices: [{ index: 0, delta, finish_reason: null }] },
+    { ...base, choices: [{ index: 0, delta: {}, finish_reason: finish }] },
+    { ...base, choices: [], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } },
+  ];
+  return `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join('')}data: [DONE]\n\n`;
+}
+
+/**
+ * @param {import('node:test').TestContext} t
+ */
+async function sandbox(t) {
+  const base = tempDir(t, 'omp-e2e-');
+  const home = join(base, 'home');
+  const project = join(base, 'project');
+  const agentDir = join(home, '.omp', 'agent');
+  const storeDir = join(base, 'store');
+  mkdirSync(agentDir, { recursive: true });
+  mkdirSync(project, { recursive: true });
+  writeFileSync(join(project, 'a.txt'), 'old\n');
+  const model = await fakeModel(t);
+  writeFileSync(
+    join(agentDir, 'models.yml'),
+    [
+      'providers:',
+      '  fake:',
+      `    baseUrl: http://127.0.0.1:${model.port}/v1`,
+      '    auth: none',
+      '    api: openai-completions',
+      '    models:',
+      '      - id: fake-model',
+      '        name: Fake Model',
+      '        reasoning: false',
+      '',
+    ].join('\n'),
+  );
+  const env = {
+    PATH: process.env.PATH ?? '',
+    HOME: home,
+    USERPROFILE: home,
+    XDG_CONFIG_HOME: join(home, '.config'),
+    XDG_DATA_HOME: join(home, '.local', 'share'),
+    XDG_STATE_HOME: join(home, '.local', 'state'),
+    XDG_CACHE_HOME: join(home, '.cache'),
+    PI_CONFIG_DIR: '.omp',
+    PI_CODING_AGENT_DIR: agentDir,
+    PI_NO_TITLE: '1',
+    CLAUDE_PENDING_EDITS_DIR: storeDir,
+    LANG: process.env.LANG ?? 'C.UTF-8',
+  };
+  return { project, storeDir, model, env };
+}
+
+/**
+ * @param {ReturnType<typeof sandbox> extends Promise<infer T> ? T : never} box
+ * @param {string[]} args
+ */
+function runOmp(box, args) {
+  const child = spawn(OMP, args, { cwd: box.project, env: box.env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk) => (stdout += chunk));
+  child.stderr.on('data', (chunk) => (stderr += chunk));
+  const timer = setTimeout(() => child.kill('SIGKILL'), 75_000);
+  return new Promise((resolve) => {
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr, seen: box.model.seen.join('\n---\n') });
+    });
+  });
+}
+
+const launch = [
+  '-p',
+  '--model',
+  'fake/fake-model',
+  '--extension',
+  PLUGIN,
+  '--no-extensions',
+  '--no-skills',
+  '--no-rules',
+  '--no-lsp',
+  '--no-context-files',
+  '--auto-approve',
+  '--approval-mode',
+  'yolo',
+  '--max-time',
+  '60s',
+];
+
+test('an OMP write becomes pending from the exact pre-edit bytes', { skip, timeout: 90_000 }, async (t) => {
+  const box = await sandbox(t);
+  const run = await runOmp(box, [...launch, '--no-session', 'replace the file']);
+
+  const store = openStore(box.storeDir);
+  const entry = store.readEntry(store.idFor(join(box.project, 'a.txt')));
+  assert.equal(run.code, 0, `omp exited ${run.code}\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}\nseen:\n${run.seen}`);
+  assert.equal(readFileSync(join(box.project, 'a.txt'), 'utf8'), 'new\n');
+  assert.equal(text(entry?.base), 'old\n');
+  assert.equal(entry?.existed, true);
+  assert.deepEqual(entry?.sessionDirs, [box.project]);
+});
+
+test('a discard is told to the same OMP session on its next prompt', { skip, timeout: 90_000 }, async (t) => {
+  const box = await sandbox(t);
+  const first = await runOmp(box, [...launch, 'hello']);
+  assert.equal(first.code, 0, `first prompt exited ${first.code}\nstderr:\n${first.stderr}\nseen:\n${first.seen}`);
+
+  openStore(box.storeDir).appendDiscard({ path: join(box.project, 'a.txt'), scope: 'file' });
+  box.model.seen.length = 0;
+  const second = await runOmp(box, [...launch, '--continue', 'and now']);
+
+  assert.equal(second.code, 0, `second prompt exited ${second.code}\nstderr:\n${second.stderr}\nseen:\n${second.seen}`);
+  assert.match(second.seen, /a\.txt: discarded all pending changes in this file/);
+  assert.equal(readFileSync(join(box.project, 'a.txt'), 'utf8'), 'old\n');
+});

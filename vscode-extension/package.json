@@ -1,8 +1,8 @@
 {
   "name": "clause",
   "displayName": "Clause",
-  "description": "Keep or Discard every edit Claude Code makes, per block, per file or all at once, across prompts and restarts.",
-  "version": "0.2.0",
+  "description": "Keep or Discard every edit Claude Code, OpenCode, or OMP makes, per block, per file or all at once, across prompts and restarts.",
+  "version": "0.3.0",
   "publisher": "clause",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -24,7 +24,8 @@
     "pending edits",
     "keep",
     "discard",
-    "cursor"
+    "cursor",
+    "omp"
   ],
   "engines": {
     "vscode": "^1.100.0"

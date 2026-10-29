@@ -1,0 +1,11 @@
+{
+  "name": "clause-omp",
+  "version": "0.3.0",
+  "description": "Shows what OMP edits in Clause's Keep/Discard review in VS Code and Cursor.",
+  "type": "module",
+  "license": "MIT",
+  "repository": "https://github.com/Yashpal-0/clause",
+  "omp": {
+    "extensions": ["./index.mjs"]
+  }
+}
