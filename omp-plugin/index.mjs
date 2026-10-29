@@ -394,9 +394,12 @@ export function editedPaths(tool, input, directory, home = homedir()) {
 }
 
 /**
- * The files OMP edits in place of paths that do not exist. For a missing path, OMP's edit tool
+ * The files OMP may edit in place of paths that do not exist. For a missing path, OMP's edit tool
  * edits the one file under the session folder whose path ends with it (pi-edit `recover_missing`).
- * That search skips ignored files, so `git ls-files` lists the files it can find.
+ * That search skips ignored files. `git ls-files` lists every file it can find, and a few it skips:
+ * ones a `.ignore` file hides, and tracked files an ignore pattern matches. So OMP can find one
+ * file where git lists several, and each of them is returned; a file the edit leaves alone records
+ * nothing.
  * shortcut: outside a Git checkout nothing is listed, so OMP's edit of such a file is not tracked;
  * walk the folder the way OMP does if those sessions matter.
  * @param {string} directory the folder the session was started in
@@ -421,8 +424,10 @@ export async function recoveredPaths(directory, paths) {
   return missing.flatMap((below) => {
     // A file with a merge conflict is listed once per side. Git also lists a tracked file that is
     // gone from disk, which OMP's search does not see.
-    const found = new Set(listed.filter((file) => file.endsWith(`/${below}`) && existsSync(join(directory, file))));
-    return found.size === 1 ? [join(directory, [...found][0])] : [];
+    const found = [...new Set(listed.filter((file) => file.endsWith(`/${below}`) && existsSync(join(directory, file))))];
+    // Past 8 matches OMP almost surely finds more than one as well, and then it edits none of them,
+    // so the two hook runs each file would cost are not spent.
+    return found.length <= 8 ? found.map((file) => join(directory, file)) : [];
   });
 }
 

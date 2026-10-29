@@ -146,7 +146,7 @@ test('an edit of a missing path is pending for the one file whose path ends with
   assert.deepEqual(stagingLeft(env.root), []);
 });
 
-test('recoveredPaths finds a file only where OMP would: the one file not ignored whose path ends with a missing path', async (t) => {
+test('recoveredPaths lists the files OMP may edit for a missing path: those not ignored whose path ends with it', async (t) => {
   const repo = tempDir(t);
   const git = (/** @type {string[]} */ ...args) => assert.equal(spawnSync('git', args, { cwd: repo }).status, 0);
   git('init', '-q');
@@ -160,7 +160,8 @@ test('recoveredPaths finds a file only where OMP would: the one file not ignored
   rmSync(join(repo, 'gone'), { recursive: true });
 
   assert.deepEqual(await recoveredPaths(repo, [join(repo, 'c.txt'), join(repo, '[x].txt')]), [join(repo, 'kept/c.txt'), join(repo, 'lit/[x].txt')]);
-  assert.deepEqual(await recoveredPaths(repo, [join(repo, 'b.txt')]), []);
+  // OMP edits one of these only if a `.ignore` file hides the other, which git does not read.
+  assert.deepEqual(await recoveredPaths(repo, [join(repo, 'b.txt')]), [join(repo, 'one/b.txt'), join(repo, 'two/b.txt')]);
   assert.deepEqual(await recoveredPaths(repo, [join(repo, 'here.txt')]), []);
   assert.deepEqual(await recoveredPaths(repo, [join(dirname(repo), 'c.txt')]), []);
 });

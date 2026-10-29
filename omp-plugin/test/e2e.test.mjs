@@ -343,18 +343,25 @@ for (const [form, path] of Object.entries(pathForms)) {
 }
 
 test('an OMP edit of a missing path is pending for the one file OMP edits in its place', { skip, timeout: 90_000 }, async (t) => {
-  // When the path does not exist, OMP edits the one file in the folder whose path ends with it.
+  // When the path does not exist, OMP edits the one file in the folder whose path ends with it. Its
+  // search skips a folder a `.ignore` file names, which git still lists.
   const box = await sandbox(t, { mode: 'apply_patch', input: '*** Begin Patch\n*** Update File: b.txt\n@@\n-old\n+new\n*** End Patch\n' });
   assert.equal(spawnSync('git', ['init', '-q'], { cwd: box.project }).status, 0);
   const file = join(box.project, 'sub', 'b.txt');
-  mkdirSync(dirname(file));
-  writeFileSync(file, 'old\n');
+  const skipped = join(box.project, 'vendor', 'b.txt');
+  for (const path of [file, skipped]) {
+    mkdirSync(dirname(path));
+    writeFileSync(path, 'old\n');
+  }
+  writeFileSync(join(box.project, '.ignore'), 'vendor/\n');
   const run = await runOmp(box, [...launch, '--no-session', 'edit the file']);
 
   const store = openStore(box.storeDir);
   assert.equal(run.code, 0, `omp exited ${run.code}\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}\nseen:\n${run.seen}`);
   assert.equal(readFileSync(file, 'utf8'), 'new\n', `OMP did not edit sub/b.txt\nseen:\n${run.seen}`);
+  assert.equal(readFileSync(skipped, 'utf8'), 'old\n');
   assert.equal(text(store.readEntry(store.idFor(file))?.base), 'old\n');
+  assert.equal(store.readEntry(store.idFor(skipped)), null);
 });
 
 test('an OMP hashline edit is pending for the quoted file it names and the quoted file it moves to', { skip, timeout: 90_000 }, async (t) => {
