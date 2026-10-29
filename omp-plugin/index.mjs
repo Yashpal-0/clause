@@ -21,10 +21,10 @@
 // blocks the edit. Nothing here may throw. A file changed through bash or ast_edit is not tracked:
 // those calls name a command or a glob, not the files they will change, so there are no bytes to save first.
 
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openStore } from '../claude-plugin/store.mjs';
 
@@ -182,8 +182,10 @@ async function stageCall(calls, event, ctx) {
   const id = event.toolCallId;
   if (typeof id !== 'string' || id === '') return;
   const directory = sessionDirectory(ctx);
-  const paths = editedPaths(event.toolName, event.input, directory);
-  if (paths.length === 0) return;
+  const named = editedPaths(event.toolName, event.input, directory);
+  if (named.length === 0) return;
+  // Only the edit tool looks for a path that is missing; write creates the file it names.
+  const paths = event.toolName === 'edit' ? Array.from(new Set([...named, ...(await recoveredPaths(directory, named))])) : named;
   const call = {
     tool,
     sessionID: sessionId(ctx),
@@ -389,6 +391,39 @@ export function editedPaths(tool, input, directory, home = homedir()) {
     return target === undefined ? [] : [target];
   });
   return Array.from(new Set(resolved));
+}
+
+/**
+ * The files OMP edits in place of paths that do not exist. For a missing path, OMP's edit tool
+ * edits the one file under the session folder whose path ends with it (pi-edit `recover_missing`).
+ * That search skips ignored files, so `git ls-files` lists the files it can find.
+ * shortcut: outside a Git checkout nothing is listed, so OMP's edit of such a file is not tracked;
+ * walk the folder the way OMP does if those sessions matter.
+ * @param {string} directory the folder the session was started in
+ * @param {string[]} paths absolute paths an edit names
+ * @returns {Promise<string[]>}
+ */
+export async function recoveredPaths(directory, paths) {
+  const missing = paths.flatMap((path) => {
+    const below = relative(directory, path).split(sep).join('/');
+    return below === '' || below === '..' || below.startsWith('../') || isAbsolute(below) || existsSync(path) ? [] : [below];
+  });
+  if (missing.length === 0) return [];
+  const patterns = missing.map((below) => `:(glob)**/${below.replace(/[*?[\]\\]/g, '\\$&')}`);
+  const listed = await /** @type {Promise<string[]>} */ (
+    new Promise((done) => {
+      // 5 s is the limit OMP puts on its own search, and well inside OMP's budget for tool_call.
+      execFile('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...patterns], { cwd: directory, timeout: 5_000 }, (error, stdout) =>
+        done(error ? [] : stdout.split('\0')),
+      );
+    })
+  );
+  return missing.flatMap((below) => {
+    // A file with a merge conflict is listed once per side. Git also lists a tracked file that is
+    // gone from disk, which OMP's search does not see.
+    const found = new Set(listed.filter((file) => file.endsWith(`/${below}`) && existsSync(join(directory, file))));
+    return found.size === 1 ? [join(directory, [...found][0])] : [];
+  });
 }
 
 /**

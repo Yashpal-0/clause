@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { openStore } from '../../claude-plugin/store.mjs';
 import { tempDir } from '../../claude-plugin/test/helpers.mjs';
-import clause, { editedPaths, hashlinePaths, patchPaths, resolveTarget, runHook, sloppyPaths } from '../index.mjs';
+import clause, { editedPaths, hashlinePaths, patchPaths, recoveredPaths, resolveTarget, runHook, sloppyPaths } from '../index.mjs';
 
 /**
  * Loads the extension against a stand-in for OMP and a scratch store. The extension starts the real
@@ -126,6 +127,42 @@ test('a relative path is resolved against the session folder, and a patch rename
   assert.equal(text(entryOf(env, relative)?.base), 'one\n');
   assert.equal(text(entryOf(env, source)?.base), 'keep\n');
   assert.equal(entryOf(env, dest)?.existed, false);
+});
+
+test('an edit of a missing path is pending for the one file whose path ends with it, which OMP edits instead', async (t) => {
+  const env = await start(t);
+  assert.equal(spawnSync('git', ['init', '-q'], { cwd: env.work }).status, 0);
+  const file = join(env.work, 'sub', 'deep', 'a.txt');
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, 'old\n');
+
+  await call(env, {
+    tool: 'edit',
+    input: { input: '*** Begin Patch\n*** Update File: deep/a.txt\n@@\n-old\n+new\n*** End Patch\n' },
+    run: () => writeFileSync(file, 'new\n'),
+  });
+
+  assert.equal(text(entryOf(env, file)?.base), 'old\n');
+  assert.deepEqual(stagingLeft(env.root), []);
+});
+
+test('recoveredPaths finds a file only where OMP would: the one file not ignored whose path ends with a missing path', async (t) => {
+  const repo = tempDir(t);
+  const git = (/** @type {string[]} */ ...args) => assert.equal(spawnSync('git', args, { cwd: repo }).status, 0);
+  git('init', '-q');
+  for (const path of ['one/b.txt', 'two/b.txt', 'kept/c.txt', 'ignored/c.txt', 'gone/c.txt', 'lit/[x].txt', 'lit/x.txt', 'here.txt']) {
+    mkdirSync(dirname(join(repo, path)), { recursive: true });
+    writeFileSync(join(repo, path), '');
+  }
+  writeFileSync(join(repo, '.gitignore'), 'ignored/\n');
+  // Git still lists a tracked file that is gone from disk; OMP's search does not see it.
+  git('add', 'gone/c.txt');
+  rmSync(join(repo, 'gone'), { recursive: true });
+
+  assert.deepEqual(await recoveredPaths(repo, [join(repo, 'c.txt'), join(repo, '[x].txt')]), [join(repo, 'kept/c.txt'), join(repo, 'lit/[x].txt')]);
+  assert.deepEqual(await recoveredPaths(repo, [join(repo, 'b.txt')]), []);
+  assert.deepEqual(await recoveredPaths(repo, [join(repo, 'here.txt')]), []);
+  assert.deepEqual(await recoveredPaths(repo, [join(dirname(repo), 'c.txt')]), []);
 });
 
 test('hashline and apply-patch name every file they can change, and a line of file text does not', async (t) => {

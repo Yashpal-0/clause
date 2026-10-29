@@ -425,18 +425,22 @@ first, which can be git.
 - `edit` and `write` are tracked, in every shape those tools take: replace, patch (including a
   rename), apply-patch, hashline and sloppy. A path counts as the file OMP changes for it: a
   pasted `read` header such as `[a.ts#1A2B]`, a stray `:` or `@` that OMP drops from the front of
-  a path, and a `file://` URL each name that file. Checked against OMP 18.13.3 on Linux. The unit
-  tests drive the hook with OMP's event shapes. The end-to-end tests load this plugin in the real
-  `omp`, with a scripted model: a write, an apply-patch edit, a sloppy edit, a hashline edit that
-  moves its file and an apply-patch edit of each of those path forms are pending from the pre-edit
-  bytes, and a discard is in the next prompt of that same session. No Windows run.
+  a path, and a `file://` URL each name that file. When the path an edit names does not exist,
+  OMP edits the one file under the session folder whose path ends with it; in a Git checkout that
+  file is tracked too. Checked against OMP 18.13.3 on Linux. The unit tests drive the hook with
+  OMP's event shapes. The end-to-end tests load this plugin in the real `omp`, with a scripted
+  model: a write, an apply-patch edit, a sloppy edit, a hashline edit that moves its file, and an
+  apply-patch edit of each of those path forms and of a missing path are pending from the
+  pre-edit bytes, and a discard is in the next prompt of that same session. No Windows run.
 - A write OMP hands to the VS Code editor uses that same pair of events. OMP does not return from
   the write until the editor has saved, so the hook compares the bytes from before the call with
   the bytes the editor saved, format-on-save included. An end-to-end test runs `omp acp` behind a
   scripted editor that saves each write: the write is pending from the pre-edit bytes, and a
   discard is in the next prompt. No live VS Code ACP client was run.
 - Not tracked: `bash`, `ast_edit` (it names globs, not the files it will change), and OMP's own
-  scratch (`local://`, `conflict://`). A `tool_call` handler that throws is swallowed, because OMP
+  scratch (`local://`, `conflict://`). Nor is the file OMP edits in place of a missing path outside
+  a Git checkout, or the file a hashline edit lands on when OMP matches the header's tag to another
+  file this session read. A `tool_call` handler that throws is swallowed, because OMP
   would otherwise block the edit. A handler that runs longer than OMP's tool-call budget still
   blocks it; a normal edit finishes in well under a second.
 - The note about discards is added on the next prompt. A revived subagent does not consume it.
