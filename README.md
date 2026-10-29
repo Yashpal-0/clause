@@ -429,7 +429,9 @@ first, which can be git.
   of that same session. No Windows run.
 - A write OMP hands to the VS Code editor uses that same pair of events. OMP does not return from
   the write until the editor has saved, so the hook compares the bytes from before the call with
-  the bytes the editor saved, format-on-save included. That path was not run against a live editor.
+  the bytes the editor saved, format-on-save included. An end-to-end test runs `omp acp` behind a
+  scripted editor that saves each write: the write is pending from the pre-edit bytes, and a
+  discard is in the next prompt. No live VS Code ACP client was run.
 - Not tracked: `bash`, `ast_edit` (it names globs, not the files it will change), and OMP's own
   scratch (`local://`, `conflict://`). A `tool_call` handler that throws is swallowed, because OMP
   would otherwise block the edit. A handler that runs longer than OMP's tool-call budget still
@@ -535,8 +537,9 @@ installed elsewhere. Tests must never touch the real `~/.claude/pending-edits`, 
 why `CLAUDE_PENDING_EDITS_DIR` exists.
 
 The OMP plugin's unit tests drive the real hook with the event shapes OMP sends. Its end-to-end
-tests (`omp-plugin/test/e2e.test.mjs`) run the real `omp` against a scripted model, and are skipped
-when it is not installed; `OMP_BIN` names a binary that is not on the `PATH`.
+tests (`omp-plugin/test/e2e.test.mjs`) run the real `omp` against a scripted model, from the command
+line and as an ACP agent behind a scripted editor, and are skipped when it is not installed;
+`OMP_BIN` names a binary that is not on the `PATH`.
 
 The OpenCode plugin's end-to-end tests (`opencode-plugin/test/e2e.test.mjs`) run the real `opencode`
 binary in a private home against a scripted model, and are skipped when it is not installed;

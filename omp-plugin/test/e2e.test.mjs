@@ -1,6 +1,7 @@
 // Runs the real `omp` binary with this plugin loaded, against a scripted OpenAI-compatible model.
 // The unit tests cover the plugin's logic. This is the check that OMP actually loads the plugin,
-// emits tool_call before the write and tool_result after it, and that those events reach the hook.
+// emits tool_call before the write and tool_result after it, and that those events reach the hook,
+// also when OMP runs as an ACP agent and hands the write to the editor.
 // Skipped when `omp` is not installed. OMP_BIN names a binary that is not on the PATH.
 
 import assert from 'node:assert/strict';
@@ -8,6 +9,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { openStore } from '../../claude-plugin/store.mjs';
@@ -48,7 +50,7 @@ function fakeModel(t) {
       const tools = Array.isArray(body.tools) ? body.tools.map((tool) => tool?.function?.name).filter((name) => typeof name === 'string') : [];
       const transcript = messages.map((message) => messageText(message?.content)).join('\n');
       seen.push(transcript);
-      const reply = replyFor(last, tools, transcript);
+      const reply = replyFor(last, tools);
       const payload = body.stream ? streamOf(reply) : JSON.stringify(completionOf(reply));
       res.writeHead(200, { 'content-type': body.stream ? 'text/event-stream' : 'application/json' });
       res.end(payload);
@@ -73,14 +75,14 @@ function messageText(content) {
 }
 
 /**
- * @param {{ role?: string }} last
+ * @param {{ role?: string, content?: unknown }} last
  * @param {string[]} tools
- * @param {string} transcript
  * @returns {{ text: string } | { tool: string, args: Record<string, unknown> }}
  */
-function replyFor(last, tools, transcript) {
+function replyFor(last, tools) {
   if (last.role === 'tool') return { text: 'done' };
-  if (tools.includes('write') && transcript.includes('replace the file')) {
+  // The last message, not the transcript: a later prompt in the same session must not write again.
+  if (tools.includes('write') && messageText(last.content).includes('replace the file')) {
     return { tool: 'write', args: { path: 'a.txt', content: 'new\n' } };
   }
   return { text: 'pong' };
@@ -187,8 +189,8 @@ function runOmp(box, args) {
   });
 }
 
-const launch = [
-  '-p',
+// This plugin and nothing else from the private home. Both the print and the ACP launch use them.
+const pluginOnly = [
   '--model',
   'fake/fake-model',
   '--extension',
@@ -198,12 +200,69 @@ const launch = [
   '--no-rules',
   '--no-lsp',
   '--no-context-files',
-  '--auto-approve',
-  '--approval-mode',
-  'yolo',
-  '--max-time',
-  '60s',
 ];
+const launch = ['-p', ...pluginOnly, '--auto-approve', '--approval-mode', 'yolo', '--max-time', '60s'];
+
+/**
+ * Starts `omp acp` and plays the editor: it advertises fs.writeTextFile, so OMP hands every write
+ * to it, and it saves each one to disk the way VS Code saves the buffer.
+ * @param {import('node:test').TestContext} t
+ * @param {ReturnType<typeof sandbox> extends Promise<infer T> ? T : never} box
+ */
+function acpEditor(t, box) {
+  const child = spawn(OMP, ['acp', ...pluginOnly], { cwd: box.project, env: box.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  t.after(() => child.kill('SIGKILL'));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => (stderr += chunk));
+  /** @type {{ path: string, content: string }[]} */
+  const writes = [];
+  /** @type {Map<number, { resolve: (result: any) => void, reject: (error: Error) => void }>} */
+  const waiting = new Map();
+  let lastId = 0;
+  const send = (/** @type {object} */ message) => child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+  /** @type {Record<string, (params: any) => unknown>} */
+  const answers = {
+    'fs/write_text_file': ({ path, content }) => {
+      writes.push({ path, content });
+      writeFileSync(path, content);
+      return {};
+    },
+    'fs/read_text_file': ({ path }) => ({ content: readFileSync(path, 'utf8') }),
+    'session/request_permission': ({ options }) => ({
+      outcome: { outcome: 'selected', optionId: options.find((/** @type {{ kind: string }} */ option) => option.kind.startsWith('allow')).optionId },
+    }),
+  };
+  createInterface({ input: child.stdout }).on('line', (line) => {
+    const message = JSON.parse(line);
+    if (message.method === undefined) {
+      const caller = waiting.get(message.id);
+      waiting.delete(message.id);
+      if (message.error) caller?.reject(new Error(`${JSON.stringify(message.error)}\nstderr:\n${stderr}`));
+      else caller?.resolve(message.result);
+    } else if (message.id !== undefined) {
+      const answer = answers[message.method];
+      send(answer ? { id: message.id, result: answer(message.params) } : { id: message.id, error: { code: -32601, message: `${message.method} is not handled` } });
+    }
+  });
+  child.on('exit', (code) => {
+    for (const caller of waiting.values()) caller.reject(new Error(`omp acp exited ${code}\nstderr:\n${stderr}`));
+    waiting.clear();
+  });
+  return {
+    writes,
+    /**
+     * @param {string} method
+     * @param {object} params
+     * @returns {Promise<any>}
+     */
+    request: (method, params) =>
+      new Promise((resolve, reject) => {
+        const id = ++lastId;
+        waiting.set(id, { resolve, reject });
+        send({ id, method, params });
+      }),
+  };
+}
 
 test('an OMP write becomes pending from the exact pre-edit bytes', { skip, timeout: 90_000 }, async (t) => {
   const box = await sandbox(t);
@@ -230,4 +289,25 @@ test('a discard is told to the same OMP session on its next prompt', { skip, tim
   assert.equal(second.code, 0, `second prompt exited ${second.code}\nstderr:\n${second.stderr}\nseen:\n${second.seen}`);
   assert.match(second.seen, /a\.txt: discarded all pending changes in this file/);
   assert.equal(readFileSync(join(box.project, 'a.txt'), 'utf8'), 'old\n');
+});
+
+test('a write OMP hands to an ACP editor is pending, and a discard reaches the next prompt', { skip, timeout: 90_000 }, async (t) => {
+  const box = await sandbox(t);
+  const editor = acpEditor(t, box);
+  const file = join(box.project, 'a.txt');
+  await editor.request('initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } } });
+  const { sessionId } = await editor.request('session/new', { cwd: box.project, mcpServers: [] });
+
+  await editor.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'replace the file' }] });
+  const store = openStore(box.storeDir);
+  assert.deepEqual(editor.writes, [{ path: file, content: 'new\n' }]);
+  assert.equal(text(store.readEntry(store.idFor(file))?.base), 'old\n');
+
+  // What Discard does in the editor: put the pre-edit bytes back, then leave a note for the agent.
+  writeFileSync(file, 'old\n');
+  store.appendDiscard({ path: file, scope: 'file' });
+  box.model.seen.length = 0;
+  await editor.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'and now' }] });
+  assert.match(box.model.seen.join('\n'), /a\.txt: discarded all pending changes in this file/);
+  assert.equal(editor.writes.length, 1);
 });
