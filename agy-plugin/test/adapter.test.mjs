@@ -399,3 +399,43 @@ test('edge: multiple tool calls in same step with distinct toolCall id or paths'
   assert.equal(text(box.entry('b.txt')), 'initial b\n');
   assert.deepEqual(staging(box), []);
 });
+
+test('subagent editing files in workspace is tracked and parent gets discard notice', (t) => {
+  const box = sandbox(t);
+  const file = join(box.work, 'subagent-file.py');
+  writeFileSync(file, 'def main():\n    pass\n');
+
+  const subagentConvId = 'subagent-session-789';
+  const subInput = {
+    conversationId: subagentConvId,
+    workspacePaths: [box.work],
+    stepIdx: 1,
+    toolCall: {
+      name: 'edit_file',
+      args: { Path: file, Target: 'pass', Replacement: 'print("hello from subagent")' }
+    }
+  };
+
+  box.hook('pre', subInput);
+  writeFileSync(file, 'def main():\n    print("hello from subagent")\n');
+  box.hook('post', subInput);
+
+  const entry = box.entry('subagent-file.py');
+  assert.equal(entry?.existed, true);
+  assert.equal(text(entry), 'def main():\n    pass\n');
+  assert.deepEqual(entry?.sessionDirs, [box.work]);
+
+  const parentConvId = 'parent-session-123';
+  box.hook('prompt', { conversationId: parentConvId, workspacePaths: [box.work] });
+
+  box.store.appendDiscard({
+    path: file,
+    scope: 'file',
+    detail: 'discarded subagent edit'
+  });
+
+  const parentPrompt = box.hook('prompt', { conversationId: parentConvId, workspacePaths: [box.work] });
+  const parsed = JSON.parse(parentPrompt);
+  assert.ok(Array.isArray(parsed?.injectSteps));
+  assert.match(parsed.injectSteps[0].ephemeralMessage, /subagent-file\.py/);
+});
