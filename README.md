@@ -78,11 +78,11 @@ Claude Code, OpenCode, or OMP. Details are under [Requirements](#requirements).
 
 **1. Install the extension**
 
-Download `clause-0.4.0.vsix` from the [latest release](https://github.com/Yashpal-0/clause/releases/latest), then:
+Download `clause-0.5.0.vsix` from the [latest release](https://github.com/Yashpal-0/clause/releases/latest), then:
 
 ```sh
-code --install-extension clause-0.4.0.vsix      # VS Code
-cursor --install-extension clause-0.4.0.vsix    # Cursor
+code --install-extension clause-0.5.0.vsix      # VS Code
+cursor --install-extension clause-0.5.0.vsix    # Cursor
 ```
 
 Or build the same file from source:
