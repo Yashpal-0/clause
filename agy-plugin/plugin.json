@@ -1,0 +1,11 @@
+{
+  "name": "clause",
+  "version": "0.4.0",
+  "description": "Keep or Discard AGY (Antigravity CLI) edits in Clause's review in VS Code and Cursor.",
+  "author": "Yashpal Yadav",
+  "homepage": "https://github.com/Yashpal-0/clause#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yashpal-0/clause.git"
+  }
+}

@@ -11,8 +11,9 @@ inline in your editor, until you **Keep** it or **Discard** it: one block, one f
 once. Close Claude, close the editor, reboot. Your review is right where you left it.
 
 It works with Claude Code, with [Codex](https://developers.openai.com/codex/), with
-[OpenCode](https://opencode.ai) 2.x, and with [OMP](https://github.com/can1357/oh-my-pi). The review
-is the same extension in VS Code or Cursor, including a write OMP hands to the VS Code editor.
+[OpenCode](https://opencode.ai) 2.x, with [OMP](https://github.com/can1357/oh-my-pi), and with
+AGY (Antigravity CLI). The review is the same extension in VS Code or Cursor, including a write
+OMP hands to the VS Code editor.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![VS Code 1.100+ and Cursor](https://img.shields.io/badge/VS%20Code%201.100%2B%20%7C%20Cursor-extension-007ACC?logo=visualstudiocode&logoColor=white)](#quick-start)
@@ -182,6 +183,23 @@ Working from a clone instead? `codex plugin marketplace add /path/to/clause`, th
 review and trust the Clause commands. This [hook trust review](https://learn.chatgpt.com/docs/hooks)
 is required before the commands run. `node` must be on the `PATH` that Codex runs with.
 
+**8. Optional: AGY (Antigravity CLI)**
+
+Edits that an AGY agent makes via `write_file` and `edit_file` go through the same review, in the
+same panel and bars. The plugin is the folder `agy-plugin/`. Add it to `plugins.json` in
+`~/.gemini/config/plugins.json` (or `.agents/plugins.json` in your workspace):
+
+```json
+{
+  "entries": [
+    { "path": "/path/to/clause/agy-plugin" }
+  ]
+}
+```
+
+Or symlink `agy-plugin` into `~/.gemini/config/plugins/clause` (or `.agents/plugins/clause`). `node`
+must be on the `PATH` AGY runs with, and `CLAUSE_NODE` can name its full path.
+
 ## Using it
 
 Put Claude Code in **accept edits** mode (Shift+Tab) to get the Cursor flow: it edits, you review
@@ -264,7 +282,7 @@ In every editor that shows a file with pending changes:
 - The status bar shows `Clause: 3 pending · 2 files`, which opens that view, and beside it
   **Review Next File**, a button that opens the next pending file wherever you are, with no editor
   open as well.
-- When Claude, Codex, OpenCode or OMP edits a file, the editor opens it at the changed block on
+- When Claude, Codex, OpenCode, OMP or AGY edits a file, the editor opens it at the changed block on
   its own, as a preview tab and without taking keyboard focus. This is **Follow**; see Settings.
 - In the file tree and on editor tabs, a file with pending changes has a violet `◆` after its name
   and a violet name. The folders above it are violet too, with a dot when collapsed. Git's letters
@@ -276,9 +294,9 @@ Clause has an editor half and an agent half, and you need both. The editor half 
 every agent:
 
 - **`claude-plugin/`** is a Claude Code plugin. Its hooks save what each file looked like before
-  the first change to it. The Codex, OpenCode and OMP plugins call that same hook.
-- **`codex-plugin/`**, **`opencode-plugin/`** and **`omp-plugin/`** turn those agents' file tools
-  into calls of the hook.
+  the first change to it. The Codex, OpenCode, OMP and AGY plugins call that same hook.
+- **`codex-plugin/`**, **`opencode-plugin/`**, **`omp-plugin/`** and **`agy-plugin/`** turn those
+  agents' file tools into calls of the hook.
 - **`vscode-extension/`** is a VS Code and Cursor extension. It shows the difference between that
   saved copy and the file as Keep/Discard blocks. A write OMP applies in the VS Code editor is
   already on disk when the hook records it.
@@ -288,6 +306,7 @@ Claude Code ──hooks──▶  ~/.claude/pending-edits/  ◀──watches─�
 Codex       ──hooks──▶  entries/<id>/{base,meta.json,touched,sessions}
 OpenCode    ──plugin─▶  entries/<id>/{base,meta.json,touched,sessions}
 OMP         ──plugin─▶  blocks = diff(base, file)
+AGY         ──plugin─▶  entries/<id>/{base,meta.json,touched,sessions}
 ```
 
 - Before Claude changes a file for the first time, the plugin stores the file's exact bytes (the
@@ -497,6 +516,14 @@ first, which can be git.
 - The next user prompt receives a note about discarded changes under that session's folder.
   A resumed session retains its position in the discard log. Tested with Codex CLI 0.166.0.
 
+**AGY**
+
+- Native `write_file` and `edit_file` calls are tracked. Arbitrary commands run through `run_command`
+  are not tracked because AGY does not produce hunk diff reports for commands.
+- Discarded changes under the workspace folder are reported to the next prompt via AGY's `PreInvocation`
+  hook (`ephemeralMessage`).
+- Hook execution runs with Node.js on the `PATH` that AGY runs with (`CLAUSE_NODE` overrides it).
+
 **Shell commands** (`bashEditDiffEnabled` on, file inside a git repository). Not tracked: commands
 that exit non-zero; background commands; binary and non-UTF-8 files; commands that change more than
 5 files; hunks of 400 lines or more; git-ignored files and files outside the repository; deleting a
@@ -521,7 +548,7 @@ path, and the kind of block with its line number, never content), and for each C
 plugin keeps how far it has read that log, which is how your next prompt can tell Claude what you
 discarded. Everything stays on your machine, in files and directories only you can read (modes 0600
 and 0700). Hook failures are written to `errors.log` in the same folder, without file contents.
-The Codex, OpenCode and OMP plugins use the same store and send nothing anywhere: each starts
+The Codex, OpenCode, OMP and AGY plugins use the same store and send nothing anywhere: each starts
 `node` on the hook and gives it the path of each edited file and the folder of the session.
 
 Deleting the folder clears all pending state. Every file keeps whatever it contains on disk.
@@ -542,6 +569,7 @@ Deleting the folder clears all pending state. Every file keeps whatever it conta
 - OMP, only for the OMP plugin (developed against 18.13.3). The editor is still VS Code 1.100+ or
   Cursor: OMP does not ship an editor of its own. When OMP is connected to VS Code, the extension
   installed there is the one that shows the review.
+- AGY (Antigravity CLI), only for the AGY plugin. `node` must be on the `PATH` AGY runs with.
 
 ## Uninstall
 
@@ -554,7 +582,8 @@ cursor --uninstall-extension clause.clause
 
 Then remove the `enable-proposed-api` entry from `~/.vscode/argv.json` and `~/.cursor/argv.json`,
 the `bashEditDiffEnabled` line from `~/.claude/settings.json` if you added it, the
-`opencode-plugin` entry from `plugins` in `~/.config/opencode/opencode.json` if you added it, `omp plugin uninstall clause` if you installed the OMP plugin, and,
+`opencode-plugin` entry from `plugins` in `~/.config/opencode/opencode.json` if you added it, `omp plugin uninstall clause` if you installed the OMP plugin,
+the `agy-plugin` entry from `plugins.json` in `~/.gemini/config/plugins.json` (or `.agents/plugins.json`) if you added it, and,
 if you want, `~/.claude/pending-edits/`.
 
 If you installed the Codex plugin, remove it with `codex plugin remove clause@clause`, then
@@ -570,6 +599,7 @@ claude-plugin/                    hooks, store and reverse-diff: plain JavaScrip
 codex-plugin/                     the Codex plugin: turns native apply_patch hooks into calls of the shared hook
 opencode-plugin/                  the OpenCode plugin: turns OpenCode's tool events into calls of the hook
 omp-plugin/                       the OMP plugin: turns OMP's edit and write events into calls of the hook
+agy-plugin/                       the AGY plugin: turns AGY write_file and edit_file hooks into calls of the hook
 vscode-extension/                 the extension: TypeScript, bundled by esbuild
 package.json, tsconfig.plugin.json  tooling for the plugin, kept outside claude-plugin/ because
                                   the marketplace copies that folder

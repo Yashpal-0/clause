@@ -1,0 +1,42 @@
+{
+  "clause": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node ./hook.mjs session-start",
+        "timeout": 10
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*(write_file|edit_file).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hook.mjs pre",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*(write_file|edit_file).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hook.mjs post",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node ./hook.mjs prompt",
+        "timeout": 10
+      }
+    ]
+  }
+}
