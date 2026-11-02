@@ -12,6 +12,44 @@ export function anchorLine(block: Block, lineCount: number): number {
   return Math.min(block.curStart, lineCount - 1);
 }
 
+export interface IdeSelectionPayload {
+  readonly filePath: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly lineCount: number;
+  readonly text: string;
+  readonly updatedAt: number;
+}
+
+export const MAX_SELECTION_LINES = 2000;
+export const MAX_SELECTION_BYTES = 128 * 1024;
+
+/**
+ * Extracts line numbers, line count, and file path from a text editor selection.
+ * Line numbers are 1-based. A selection ending at column 0 of a following line
+ * does not include that line.
+ */
+export function extractSelectionPayload(
+  selection: SelectionLike & { readonly isEmpty?: boolean },
+  filePath: string,
+  text: string,
+  now: number = Date.now(),
+): IdeSelectionPayload | null {
+  if (selection.isEmpty === true || (selection.start.line === selection.end.line && selection.start.character === selection.end.character) || text.length === 0) {
+    return null;
+  }
+  const startLine = selection.start.line + 1;
+  const rawEndLine =
+    selection.end.character === 0 && selection.end.line > selection.start.line
+      ? selection.end.line
+      : selection.end.line + 1;
+  const rawLineCount = Math.max(1, rawEndLine - startLine + 1);
+  const endLine = rawLineCount > MAX_SELECTION_LINES ? startLine + MAX_SELECTION_LINES - 1 : rawEndLine;
+  const lineCount = Math.min(rawLineCount, MAX_SELECTION_LINES);
+  const cappedText = text.length > MAX_SELECTION_BYTES ? text.slice(0, MAX_SELECTION_BYTES) : text;
+  return { filePath, startLine, endLine, lineCount, text: cappedText, updatedAt: now };
+}
+
 /**
  * The block the cursor is in. Lines Claude added or changed are in their block.
  * A removed block has no lines, so it counts the line on either side of the gap;

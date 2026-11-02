@@ -10,6 +10,7 @@ import { ExplorerMarks, registerMarks } from './ui/explorer.ts';
 import { Follow } from './ui/follow.ts';
 import { Insets } from './ui/insets.ts';
 import { Summary } from './ui/status.ts';
+import { EditorSelectionBridge } from './ui/selection.ts';
 import { PendingTree } from './ui/tree.ts';
 
 /** What `activate` returns. Nothing else uses it; the integration tests drive the extension through it. */
@@ -23,6 +24,7 @@ export interface ExtensionApi {
   readonly tree: PendingTree;
   readonly follow: Follow;
   readonly explorer: ExplorerMarks;
+  readonly selectionBridge: EditorSelectionBridge;
 }
 
 export function activate(context: vscode.ExtensionContext): ExtensionApi {
@@ -41,6 +43,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const follow = new Follow(model, (message) => output.appendLine(message));
   const explorer = new ExplorerMarks(model);
   const keys = new ContextKeys(model);
+  const selectionBridge = new EditorSelectionBridge(model);
 
   context.subscriptions.push(
     output,
@@ -54,6 +57,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     follow,
     explorer,
     keys,
+    selectionBridge,
     registerCommands(model, prompts),
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, lenses),
     baselines,
@@ -68,7 +72,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     output.appendLine(`could not start: ${reason}`);
     void vscode.window.showErrorMessage(`Clause could not start: ${reason}`);
   }
-  return { model, prompts, decorations, insets, summary, context: keys, tree, follow, explorer };
+  return { model, prompts, decorations, insets, summary, context: keys, tree, follow, explorer, selectionBridge };
 }
 
 export function deactivate(): void {}

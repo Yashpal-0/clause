@@ -1,0 +1,6 @@
+{
+  "name": "clause",
+  "version": "0.4.0",
+  "description": "Keep or Discard Codex edits in Clause's review in VS Code and Cursor.",
+  "hooks": "./codex-plugin/hooks/hooks.json"
+}

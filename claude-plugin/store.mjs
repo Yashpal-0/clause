@@ -142,6 +142,7 @@ export function openStore(root = defaultRoot()) {
   const tmpDir = join(root, 'tmp');
   const trashDir = join(root, 'trash');
   const cursorsDir = join(root, 'cursors');
+  const selectionsDir = join(root, 'selections');
   const logFile = join(root, 'discards.jsonl');
   const errorsFile = join(root, 'errors.log');
 
@@ -496,7 +497,7 @@ export function openStore(root = defaultRoot()) {
    * @param {{ maxAgeMs?: number, now?: number }} [options]
    */
   function sweep({ maxAgeMs = DEFAULT_STALE_MS, now = Date.now() } = {}) {
-    for (const dir of [stagingDir, tmpDir, trashDir]) {
+    for (const dir of [stagingDir, tmpDir, trashDir, selectionsDir]) {
       for (const name of readNames(dir)) {
         const target = join(dir, name);
         try {
@@ -505,6 +506,83 @@ export function openStore(root = defaultRoot()) {
           if (!isMissing(error)) logError('sweep', error);
         }
       }
+    }
+  }
+
+  /**
+   * @param {string} scopeDir
+   */
+  function selectionPath(scopeDir) {
+    return join(selectionsDir, `${hash(canonicalPath(scopeDir))}.json`);
+  }
+
+  /**
+   * @param {string} scopeDir
+   * @param {{ filePath: string, startLine: number, endLine: number, lineCount: number, text: string, updatedAt?: number }} selection
+   */
+  function writeSelection(scopeDir, selection) {
+    if (typeof scopeDir !== 'string' || scopeDir === '') throw new TypeError('writeSelection: scopeDir must be a non-empty string');
+    if (!selection || typeof selection.filePath !== 'string' || typeof selection.text !== 'string') {
+      throw new TypeError('writeSelection: selection must have filePath and text strings');
+    }
+    const record = {
+      v: FORMAT_VERSION,
+      filePath: canonicalPath(selection.filePath),
+      startLine: Number(selection.startLine) || 1,
+      endLine: Number(selection.endLine) || 1,
+      lineCount: Number(selection.lineCount) || 1,
+      text: selection.text,
+      updatedAt: selection.updatedAt ?? Date.now(),
+    };
+    mkdirp(selectionsDir);
+    mkdirp(tmpDir);
+    const scratch = join(tmpDir, `selection.${uniqueSuffix()}`);
+    writeDurable(scratch, Buffer.from(JSON.stringify(record)));
+    renameSync(scratch, selectionPath(scopeDir));
+  }
+
+  /**
+   * @param {string} scopeDir
+   * @param {{ maxAgeMs?: number, now?: number }} [options]
+   * @returns {{ filePath: string, startLine: number, endLine: number, lineCount: number, text: string, updatedAt: number } | null}
+   */
+  function readSelection(scopeDir, { maxAgeMs = 300_000, now = Date.now() } = {}) {
+    try {
+      const raw = readFileSync(selectionPath(scopeDir), 'utf8');
+      const parsed = JSON.parse(raw);
+      if (
+        parsed?.v !== FORMAT_VERSION ||
+        typeof parsed.filePath !== 'string' ||
+        typeof parsed.text !== 'string' ||
+        !Number.isFinite(parsed.updatedAt) ||
+        now - parsed.updatedAt > maxAgeMs
+      ) {
+        return null;
+      }
+      return {
+        filePath: parsed.filePath,
+        startLine: parsed.startLine,
+        endLine: parsed.endLine,
+        lineCount: parsed.lineCount,
+        text: parsed.text,
+        updatedAt: parsed.updatedAt,
+      };
+    } catch (error) {
+      if (isMissing(error)) return null;
+      throw error;
+    }
+  }
+
+  /** @param {string} scopeDir */
+  function clearSelection(scopeDir) {
+    const file = selectionPath(scopeDir);
+    try {
+      if (!existsSync(file)) return false;
+      rmSync(file, { force: true });
+      return true;
+    } catch (error) {
+      if (isMissing(error)) return false;
+      throw error;
     }
   }
 
@@ -697,6 +775,9 @@ export function openStore(root = defaultRoot()) {
     logSize,
     getCursor,
     setCursor,
+    writeSelection,
+    readSelection,
+    clearSelection,
     logError,
   });
 }

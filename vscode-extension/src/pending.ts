@@ -146,6 +146,10 @@ export class PendingModel implements vscode.Disposable {
     this.#log = log;
   }
 
+  get store(): Store {
+    return this.#store;
+  }
+
   start(): void {
     this.#subscriptions.push(
       vscode.workspace.onDidOpenTextDocument((document) => this.#guard('open', () => this.#onOpen(document))),

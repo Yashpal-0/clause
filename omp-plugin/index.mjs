@@ -77,7 +77,7 @@ const unquote = (/** @type {string} */ text) => (/^(["']).*\1$/s.test(text) ? te
 /**
  * @typedef {object} OmpContext the part of OMP's handler context that is used
  * @property {string} cwd
- * @property {{ notify?: (message: string, type?: 'info' | 'warning' | 'error') => void }} [ui]
+ * @property {{ notify?: (message: string, type?: 'info' | 'warning' | 'error') => void, setStatus?: (id: string, text: string | undefined) => void }} [ui]
  * @property {{ getSessionId?: () => string }} [sessionManager]
  */
 
@@ -105,8 +105,14 @@ const unquote = (/** @type {string} */ text) => (/^(["']).*\1$/s.test(text) ? te
 
 /**
  * @param {{ on: (name: string, handler: (event: ToolEvent, ctx: OmpContext) => Promise<unknown>) => void }} pi
+ * @param {{ storeRoot?: string, pollIntervalMs?: number }} [options]
  */
-export default function clause(pi) {
+export default function clause(pi, { storeRoot, pollIntervalMs = 250 } = {}) {
+  const store = openStore(storeRoot);
+  /** @type {NodeJS.Timeout | undefined} */
+  let pollTimer;
+  /** @type {string | undefined} */
+  let lastStatusText;
   /** @type {Map<string, Call[]>} */
   const calls = new Map();
 
@@ -122,6 +128,23 @@ export default function clause(pi) {
     } catch (error) {
       logError('session_start', error);
     }
+
+    const updateSelectionStatus = () => {
+      try {
+        const dir = sessionDirectory(ctx);
+        const sel = store.readSelection(dir);
+        const statusText = sel ? formatSelectionStatus(sel) : undefined;
+        if (statusText !== lastStatusText) {
+          lastStatusText = statusText;
+          ctx.ui?.setStatus?.('clause-selection', statusText);
+        }
+      } catch (error) {
+        logError('selection_poll', error);
+      }
+    };
+    clearInterval(pollTimer);
+    pollTimer = setInterval(updateSelectionStatus, pollIntervalMs);
+    pollTimer.unref?.();
   });
 
   pi.on('tool_call', async (event, ctx) => {
@@ -155,8 +178,33 @@ export default function clause(pi) {
       // A revived subagent fires this with the result discarded. Reading the discard log here
       // would consume the note before the prompt that can still act on it.
       if (event.reason !== 'prompt') return;
-      const note = noteFrom((await runHook('prompt', { session_id: sessionId(ctx), cwd: sessionDirectory(ctx) })).stdout);
-      if (note === null) return;
+      const dir = sessionDirectory(ctx);
+      const note = noteFrom((await runHook('prompt', { session_id: sessionId(ctx), cwd: dir })).stdout);
+      const sel = store.readSelection(dir);
+      if (!note && !sel) return;
+
+      if (note && sel) {
+        return {
+          message: {
+            customType: 'clause-context',
+            content: `${note}\n\n${formatSelectionContext(sel)}`,
+            display: false,
+            attribution: 'user',
+          },
+        };
+      }
+
+      if (sel) {
+        return {
+          message: {
+            customType: 'clause-selection',
+            content: formatSelectionContext(sel),
+            display: false,
+            attribution: 'user',
+          },
+        };
+      }
+
       return {
         message: {
           customType: 'clause-discard',
@@ -169,6 +217,34 @@ export default function clause(pi) {
       logError('before_agent_start', error);
     }
   });
+
+  pi.on('session_shutdown', async (_event, ctx) => {
+    clearInterval(pollTimer);
+    pollTimer = undefined;
+    lastStatusText = undefined;
+    try {
+      ctx.ui?.setStatus?.('clause-selection', undefined);
+    } catch (error) {
+      logError('session_shutdown', error);
+    }
+  });
+}
+
+/**
+ * @param {{ filePath: string, startLine: number, endLine: number, text: string }} selection
+ * @returns {string}
+ */
+export function formatSelectionContext(selection) {
+  return `<ide_selection file="${selection.filePath}" lines="${selection.startLine}-${selection.endLine}">\n${selection.text}\n</ide_selection>`;
+}
+
+/**
+ * @param {{ lineCount: number }} selection
+ * @returns {string}
+ */
+export function formatSelectionStatus(selection) {
+  const count = selection.lineCount;
+  return `• ${count} ${count === 1 ? 'line' : 'lines'} selected`;
 }
 
 /**

@@ -1,14 +1,16 @@
 {
   "name": "clause",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "Keep or Discard edits from Claude Code, OpenCode, and OMP. The OMP plugin is omp-plugin/; the editor extension is vscode-extension/.",
+  "description": "Keep or Discard edits from Claude Code, Codex, OpenCode, and OMP. The editor extension is vscode-extension/.",
   "scripts": {
     "test:plugin": "node --test \"claude-plugin/test/*.test.mjs\"",
     "test:opencode": "node --test \"opencode-plugin/test/*.test.mjs\"",
     "test:omp": "node --test \"omp-plugin/test/*.test.mjs\"",
+    "test:codex": "node --test \"codex-plugin/test/adapter.test.mjs\" \"codex-plugin/test/pending.test.mjs\"",
+    "test:codex:e2e": "node --test \"codex-plugin/test/e2e.test.mjs\"",
     "typecheck:plugin": "tsc -p tsconfig.plugin.json",
-    "test": "npm run typecheck:plugin && npm run test:plugin && npm run test:opencode && npm run test:omp"
+    "test": "npm run typecheck:plugin && npm run test:plugin && npm run test:opencode && npm run test:omp && npm run test:codex"
   },
   "omp": {
     "extensions": ["./omp-plugin/index.mjs"]

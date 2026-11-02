@@ -1,8 +1,8 @@
 {
   "name": "clause",
   "displayName": "Clause",
-  "description": "Keep or Discard every edit Claude Code, OpenCode, or OMP makes, per block, per file or all at once, across prompts and restarts.",
-  "version": "0.3.0",
+  "description": "Keep or Discard every edit Claude Code, Codex, OpenCode, or OMP makes, per block, per file or all at once, across prompts and restarts.",
+  "version": "0.4.0",
   "publisher": "clause",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -18,6 +18,7 @@
   "keywords": [
     "claude",
     "claude code",
+    "codex",
     "ai",
     "review",
     "diff",
