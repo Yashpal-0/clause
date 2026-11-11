@@ -4,7 +4,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { isAbsolute, join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openStore } from '../claude-plugin/store.mjs';
 import { completedPaths, readCalls, removeCall, saveCall, sessionRoot } from './pending.mjs';
@@ -76,7 +76,7 @@ async function main() {
       if (header === '*** Update File: ') source = resolve(input.cwd, path);
       if (header === '*** Move to: ' && source !== '' && path !== '') moves.push({ source, destination: resolve(input.cwd, path) });
       return path === '' ? [] : [resolve(input.cwd, path)];
-    })));
+    }))).filter((path) => isInside(root, path));
     const files = paths.map((path) => ({
       path, identity: store.idFor(path),
       // Include the real identity so a retargeted or deleted symlink cannot promote another file's bytes.
@@ -212,6 +212,15 @@ function runHook(event, input, deadline = Date.now() + HOOK_TIMEOUT_MS) {
     });
     child.stdin.end(JSON.stringify(input));
   });
+}
+
+/**
+ * @param {string} dir
+ * @param {string} path
+ */
+function isInside(dir, path) {
+  const rel = relative(resolve(dir), resolve(path));
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
 /** @param {string} event @param {unknown} error */

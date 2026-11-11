@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { blockAtLine, partsToKeep } from '../nav.ts';
 import type { PendingModel } from '../pending.ts';
-import { scopedCounts } from './scope.ts';
+import { isInScope, scopedCounts } from './scope.ts';
 
 /**
  * The context keys that `when` clauses of menus and keybindings read:
@@ -37,10 +37,11 @@ export class ContextKeys implements vscode.Disposable {
   update(): void {
     const editor = vscode.window.activeTextEditor;
     const file = editor === undefined ? undefined : this.#model.fileForUri(editor.document.uri);
+    const active = file !== undefined && isInScope(file) ? file : undefined;
     this.#set('clause.hasPending', scopedCounts(this.#model).pending > 0);
-    this.#set('clause.fileHasPending', file !== undefined);
-    this.#set('clause.inBlock', editor !== undefined && file !== undefined && blockAtLine(file.state.blocks, editor.selection.active.line) !== undefined);
-    this.#set('clause.selectionInPending', editor !== undefined && file !== undefined && partsToKeep(file.state, editor.selections).length > 0);
+    this.#set('clause.fileHasPending', active !== undefined);
+    this.#set('clause.inBlock', editor !== undefined && active !== undefined && blockAtLine(active.state.blocks, editor.selection.active.line) !== undefined);
+    this.#set('clause.selectionInPending', editor !== undefined && active !== undefined && partsToKeep(active.state, editor.selections).length > 0);
     this.#set('clause.canUndo', editor !== undefined && this.#model.canUndo(editor.document.uri));
   }
 

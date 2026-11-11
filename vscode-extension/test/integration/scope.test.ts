@@ -106,19 +106,20 @@ describe('what the panel lists', () => {
     assert.deepEqual(api.model.counts(), { pending: 1, files: 1 }, 'it stays pending');
   });
 
-  it('lists a file outside the folder when a session started in the folder or inside it changed it', async () => {
+  it('does not list a file outside the folder even when a session was started in the folder or inside it', async () => {
     const started: Array<[string, string]> = [
       ['the folder', folder],
       ['a folder inside it', join(folder, 'sub', 'deeper')],
     ];
     for (const [name, sessionDir] of started) {
       seedEditedElsewhere('o.txt', 'o\n', 'O\n', sessionDir);
-      await waitFor(`the group for a session in ${name}`, () => groupFiles().length === 1);
+      await waitFor('the model to hold the file', () => api.model.files().length === 1);
+      await sleep(QUIET_MS);
 
-      assert.deepEqual(groupFiles(), ['o.txt'], name);
-      assert.equal(api.summary.text, '$(diff) Clause: 1 pending · 1 file', name);
-      assert.equal(api.summary.badge, 1, name);
-      assert.equal(hasPendingKey(), true, name);
+      assert.deepEqual(api.tree.getChildren(), [], name);
+      assert.equal(api.summary.text, undefined, name);
+      assert.equal(api.summary.badge, undefined, name);
+      assert.equal(hasPendingKey(), false, name);
       await reset(api);
     }
   });
@@ -152,17 +153,18 @@ describe('what the panel lists', () => {
     assert.equal(hasPendingKey(), true);
   });
 
-  it('lists a file once a session folder is recorded for it, without anything else changing', async () => {
+  it('does not list a file outside the folder even once a session folder is recorded for it', async () => {
     const path = seedEditedElsewhere('o.txt', 'o\n', 'O\n', dirname(folder));
     await waitFor('the model to hold the file', () => api.model.files().length === 1);
     await sleep(QUIET_MS);
     assert.deepEqual(api.tree.getChildren(), []);
 
     assert.ok(store().addSessionDir(store().idFor(path), folder));
+    await sleep(QUIET_MS);
 
-    await waitFor('the group to appear', () => groupFiles().length === 1);
-    await waitFor('the status bar item to appear', () => api.summary.text === '$(diff) Clause: 1 pending · 1 file');
-    await waitFor('the panel to be shown', () => hasPendingKey() === true);
+    assert.deepEqual(api.tree.getChildren(), []);
+    assert.equal(api.summary.text, undefined);
+    assert.equal(hasPendingKey(), false);
   });
 
   it('counts what it lists and nothing else', async () => {
@@ -171,12 +173,11 @@ describe('what the panel lists', () => {
     seedEditedElsewhere('hidden.txt', 'h\n', 'H\n', null);
     await waitFor('all three files to be pending', () => api.model.files().length === 3);
 
-    await waitFor('the counts', () => api.summary.text === '$(diff) Clause: 3 pending · 2 files');
+    await waitFor('the counts', () => api.summary.text === '$(diff) Clause: 2 pending · 1 file');
 
-    assert.equal(api.summary.badge, 2, 'two files listed, with three changes between them');
-    assert.deepEqual(labels(), ['a.txt', 'group']);
-    assert.deepEqual(groupFiles(), ['listed.txt']);
-    assert.deepEqual(api.model.counts(), { pending: 4, files: 3 }, 'the model still holds the hidden file');
+    assert.equal(api.summary.badge, 1, 'one file listed');
+    assert.deepEqual(labels(), ['a.txt']);
+    assert.deepEqual(api.model.counts(), { pending: 4, files: 3 }, 'the model still holds the hidden files');
   });
 
   describe('Keep All and Discard All', () => {
@@ -190,24 +191,18 @@ describe('what the panel lists', () => {
       return files;
     }
 
-    it('keep only what is inside the folder, and the group\'s own button keeps only the group', async () => {
+    it('keep only what is inside the folder', async () => {
       const { inside, listed, hidden } = await seedScene();
 
       assertOk(await vscode.commands.executeCommand('clause.keepAll'));
       assert.deepEqual([hasEntry(inside), hasEntry(listed), hasEntry(hidden)], [false, true, true]);
-
-      assertOk(await vscode.commands.executeCommand('clause.keepAll', { kind: 'group' }));
-      assert.deepEqual([hasEntry(inside), hasEntry(listed), hasEntry(hidden)], [false, false, true]);
     });
 
-    it('discard only what is inside the folder, and the group\'s own button discards only the group', async () => {
+    it('discard only what is inside the folder', async () => {
       const { inside, listed, hidden } = await seedScene();
 
       assertOk(await vscode.commands.executeCommand('clause.discardAll'));
       assert.deepEqual([hasEntry(inside), hasEntry(listed), hasEntry(hidden)], [false, true, true]);
-
-      assertOk(await vscode.commands.executeCommand('clause.discardAll', { kind: 'group' }));
-      assert.deepEqual([hasEntry(inside), hasEntry(listed), hasEntry(hidden)], [false, false, true]);
     });
   });
 });

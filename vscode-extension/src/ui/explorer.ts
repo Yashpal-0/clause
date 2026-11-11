@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { changedMarks, folderMarks, MARKER_BADGE, markerTooltip } from '../marks.ts';
 import type { PendingModel } from '../pending.ts';
 import { NewestRegistration } from '../registration.ts';
+import { isInScope } from './scope.ts';
 
 const markerColour = () => new vscode.ThemeColor('clause.explorerForeground');
 
@@ -33,7 +34,7 @@ export class ExplorerMarks implements vscode.FileDecorationProvider, vscode.Disp
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
     const file = this.#model.fileForUri(uri);
-    if (file !== undefined) {
+    if (file !== undefined && isInScope(file)) {
       const decoration = new vscode.FileDecoration(MARKER_BADGE, markerTooltip(file.state.pending), markerColour());
       // The folders above it show a dot for this file, so that a collapsed folder says where to look.
       decoration.propagate = true;
@@ -56,7 +57,8 @@ export class ExplorerMarks implements vscode.FileDecorationProvider, vscode.Disp
 
   /** Tells the file tree which files and folders to ask about again. The model reports on every keystroke too, and the tree is only worth waking when a count changed. */
   #announce(): void {
-    const counts = new Map(this.#model.files().map((file) => [file.path, file.state.pending] as const));
+    const scopedFiles = this.#model.files().filter(isInScope);
+    const counts = new Map(scopedFiles.map((file) => [file.path, file.state.pending] as const));
     // shortcut: the workspace folders are read now, so one added while the window is open is marked from the model's next report on.
     const roots = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
     const folders = folderMarks(counts.keys(), roots);

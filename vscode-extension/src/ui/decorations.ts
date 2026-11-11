@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { PendingModel } from '../pending.ts';
 import { decorationPlan, fenced, type DecorationPlan, type Excerpt, type RemovedGap } from '../present.ts';
 import type { Insets } from './insets.ts';
+import { isInScope } from './scope.ts';
 
 const NOTHING: DecorationPlan = { added: [], removed: [] };
 
@@ -63,7 +64,7 @@ export class Decorations implements vscode.Disposable {
   #apply(editor: vscode.TextEditor): void {
     const { document } = editor;
     const file = this.#model.fileForUri(document.uri);
-    const full = file === undefined ? NOTHING : decorationPlan(file.state);
+    const full = file === undefined || !isInScope(file) ? NOTHING : decorationPlan(file.state);
     const shownAsInset = (gap: RemovedGap) => this.#insets.covers(document.uri, gap.block);
     const plan: DecorationPlan = { added: full.added, removed: full.removed.filter((gap) => !shownAsInset(gap)) };
     this.#applied.set(editor, plan);

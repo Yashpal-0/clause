@@ -4,7 +4,7 @@ import { anchorLine, blockAfterSettled, blockAtLine, fileAfter, findBlock, nextB
 import type { OpResult, PendingFile, PendingModel } from '../pending.ts';
 import { asTarget } from '../targets.ts';
 import { BASELINE_SCHEME, openAllDiffs, openDiff } from './diff.ts';
-import { partition, visible } from './scope.ts';
+import { isInScope, partition, visible } from './scope.ts';
 
 /**
  * How long a kept or discarded change waits for the model to show the file without it before the cursor stays where
@@ -33,21 +33,31 @@ export function registerCommands(model: PendingModel, prompts: Prompts): vscode.
   const activeEditor = () => vscode.window.activeTextEditor;
   const activeFile = (): PendingFile | undefined => {
     const editor = activeEditor();
-    return editor === undefined ? undefined : model.fileForUri(editor.document.uri);
+    if (editor === undefined) return undefined;
+    const file = model.fileForUri(editor.document.uri);
+    return file !== undefined && isInScope(file) ? file : undefined;
   };
 
   /** The file the command was meant for: the row or resource it was called on, else the active editor's. */
   const fileFrom = (arg: unknown): PendingFile | undefined => {
-    if (arg instanceof vscode.Uri) return model.fileForUri(arg);
+    if (arg instanceof vscode.Uri) {
+      const file = model.fileForUri(arg);
+      return file !== undefined && isInScope(file) ? file : undefined;
+    }
     const target = asTarget(arg);
     if (target === undefined) return activeFile();
-    return target.kind === 'group' ? undefined : model.fileById(target.id);
+    if (target.kind === 'group') return undefined;
+    const file = model.fileById(target.id);
+    return file !== undefined && isInScope(file) ? file : undefined;
   };
 
   /** The block the command was meant for: the lens or row it was called on, else the one under the cursor. */
   const blockFrom = (arg: unknown): { id: string; block: Block } | undefined => {
     const target = asTarget(arg);
-    if (target?.kind === 'block') return { id: target.id, block: target.block };
+    if (target?.kind === 'block') {
+      const file = model.fileById(target.id);
+      return file !== undefined && isInScope(file) ? { id: target.id, block: target.block } : undefined;
+    }
     if (target !== undefined) return undefined;
 
     const editor = activeEditor();

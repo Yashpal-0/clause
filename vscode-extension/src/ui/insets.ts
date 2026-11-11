@@ -7,6 +7,7 @@ import type { PendingModel } from '../pending.ts';
 import { insetMatches, insetPlan, type InsetItem } from '../present.ts';
 import type { FileState } from '../state.ts';
 import type { BlockTarget } from '../targets.ts';
+import { isInScope } from './scope.ts';
 
 /**
  * Every inset is a webview, which costs memory and start-up time, so only this
@@ -143,7 +144,7 @@ export class Insets implements vscode.Disposable {
   #wanted(editor: vscode.TextEditor): InsetItem[] {
     if (this.#unavailable || !this.#eligible(editor)) return [];
     const file = this.#model.fileForUri(editor.document.uri);
-    return file === undefined ? [] : insetPlan(file.state).filter((item) => item.position <= MAX_BLOCKS_WITH_INSETS);
+    return file === undefined || !isInScope(file) ? [] : insetPlan(file.state).filter((item) => item.position <= MAX_BLOCKS_WITH_INSETS);
   }
 
   /** Makes `editor`'s insets match the plan; whether any inset was added or removed. */
@@ -252,7 +253,7 @@ export class Insets implements vscode.Disposable {
   async #act(editor: vscode.TextEditor, live: Live, message: unknown): Promise<void> {
     const action = asInsetAction(message);
     const file = this.#model.fileForUri(editor.document.uri);
-    if (action === undefined || file === undefined) return;
+    if (action === undefined || file === undefined || !isInScope(file)) return;
 
     try {
       if (action === 'keep' || action === 'discard') {

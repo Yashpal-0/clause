@@ -25,6 +25,11 @@ export function whereIs(file: PendingFile): { inside: boolean; directory: string
   return locate(file.path, workspaceRoots(), homedir());
 }
 
+/** Whether `file` is in scope for this window (inside its folders, or any file if no folder is open). */
+export function isInScope(file: PendingFile): boolean {
+  return classify(file.path, file.sessionDirs, workspaceRoots()) !== 'hidden';
+}
+
 /**
  * Splits the pending files this window lists (see `classify`) into those in its
  * folders and those outside them that its sessions changed. The store is shared

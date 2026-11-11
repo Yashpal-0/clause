@@ -94,7 +94,7 @@ describe('the Clause view', () => {
     assert.equal(itemOf(fileTarget(file)).description, basename(dirname(path)));
   });
 
-  it('puts files outside this folder that this folder\'s sessions changed under "Outside this folder", after the ones in it', async () => {
+  it('does not list files outside this folder in the tree', async () => {
     seedEdited('a.txt', 'a\n', 'A\n');
     seedEditedElsewhere('o.txt', 'o\n', 'O\n');
     await waitFor('both files to be pending', () => api.model.files().length === 2);
@@ -103,18 +103,11 @@ describe('the Clause view', () => {
 
     assert.deepEqual(
       roots.map((node) => node.kind),
-      ['file', 'group'],
+      ['file'],
     );
-    const group = itemOf(roots[1]!);
-    assert.equal(group.label, 'Outside this folder');
-    assert.equal(group.id, 'group:outside');
-    assert.equal(group.tooltip, 'Files outside this folder that Claude sessions started in this folder changed');
-    assert.equal(group.description, '1 file');
-    assert.equal(group.contextValue, 'group');
-    assert.equal(group.collapsibleState, EXPANDED);
     assert.deepEqual(
-      api.tree.getChildren(roots[1]!).map((node) => itemOf(node).label),
-      ['o.txt'],
+      roots.map((node) => itemOf(node).label),
+      ['a.txt'],
     );
   });
 

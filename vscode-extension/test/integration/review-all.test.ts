@@ -142,7 +142,7 @@ describe('Review All Changes', () => {
     );
   });
 
-  it('includes a file outside the folder that a session started in the folder changed', async () => {
+  it('does not include a file outside the folder in review all', async () => {
     const inside = seedEdited('a.txt', BEFORE, AFTER);
     await sleep(5);
     const outside = seedEditedElsewhere('outside.txt', BEFORE, AFTER);
@@ -152,7 +152,7 @@ describe('Review All Changes', () => {
 
     assert.deepEqual(
       diffs.map((diff) => diff.modified.fsPath),
-      [inside, outside],
+      [inside],
     );
   });
 

@@ -51,18 +51,6 @@ describe('Keep All and Discard All', () => {
       assert.equal(read(alsoInside), 'x\nY\n');
       assert.deepEqual(api.model.counts(), { pending: 1, files: 1 });
     });
-
-    it('keeps only the ones outside the folder when called on their group', async () => {
-      const { inside, alsoInside, outside } = await seedScene();
-
-      assertOk(await vscode.commands.executeCommand('clause.keepAll', { kind: 'group' }));
-
-      assert.equal(hasEntry(outside), false);
-      assert.equal(hasEntry(inside), true);
-      assert.equal(hasEntry(alsoInside), true);
-      assert.equal(read(outside), 'O\n');
-      assert.deepEqual(api.model.counts(), { pending: 3, files: 2 });
-    });
   });
 
   describe('Discard All', () => {
@@ -77,18 +65,6 @@ describe('Keep All and Discard All', () => {
       assert.equal(hasEntry(alsoInside), false);
       assert.equal(read(outside), 'O\n');
       assert.equal(hasEntry(outside), true);
-    });
-
-    it('discards only the ones outside the folder when called on their group', async () => {
-      const { inside, alsoInside, outside } = await seedScene();
-
-      assertOk(await vscode.commands.executeCommand('clause.discardAll', { kind: 'group' }));
-
-      assert.equal(read(outside), 'o\n');
-      assert.equal(hasEntry(outside), false);
-      assert.equal(read(inside), AFTER);
-      assert.equal(read(alsoInside), 'x\nY\n');
-      assert.equal(hasEntry(inside), true);
     });
 
     it('asks first, saying how many files and changes it would revert', async () => {

@@ -280,11 +280,11 @@ test('with no folder open every file is here', () => {
   assert.equal(classify('/etc/hosts', ['/w/app'], []), 'here');
 });
 
-test('a file elsewhere is outside when a session was started in a window folder or inside one', () => {
-  assert.equal(classify('/etc/hosts', ['/w/app'], ['/w/app']), 'outside');
-  assert.equal(classify('/etc/hosts', ['/w/app/pkg/src'], ['/w/app']), 'outside');
-  assert.equal(classify('/etc/hosts', ['/other', '/w/app/pkg'], ['/w/app']), 'outside', 'any of the sessions');
-  assert.equal(classify('/etc/hosts', ['/w/app/'], ['/w/app']), 'outside');
+test('a file elsewhere is hidden when window folders are open', () => {
+  assert.equal(classify('/etc/hosts', ['/w/app'], ['/w/app']), 'hidden');
+  assert.equal(classify('/etc/hosts', ['/w/app/pkg/src'], ['/w/app']), 'hidden');
+  assert.equal(classify('/etc/hosts', ['/other', '/w/app/pkg'], ['/w/app']), 'hidden');
+  assert.equal(classify('/etc/hosts', ['/w/app/'], ['/w/app']), 'hidden');
 });
 
 test('a file elsewhere is hidden when no session was started in a window folder or inside one', () => {
@@ -294,18 +294,18 @@ test('a file elsewhere is hidden when no session was started in a window folder 
   }
 });
 
-test('with several window folders, a session in any of them counts', () => {
+test('with several window folders, only files inside them are here, files outside are hidden', () => {
   const roots = ['/w/app', '/w/lib'];
   assert.equal(classify('/w/lib/a.ts', [], roots), 'here');
-  assert.equal(classify('/etc/hosts', ['/w/lib/src'], roots), 'outside');
+  assert.equal(classify('/etc/hosts', ['/w/lib/src'], roots), 'hidden');
   assert.equal(classify('/etc/hosts', ['/w/docs'], roots), 'hidden');
 });
 
 test('a folder opened through a symlink counts under its path and its real path', () => {
   const roots = ['/home/me/link', '/data/real'];
   assert.equal(classify('/data/real/a.ts', [], roots), 'here');
-  assert.equal(classify('/etc/hosts', ['/data/real/sub'], roots), 'outside');
-  assert.equal(classify('/etc/hosts', ['/home/me/link/sub'], roots), 'outside');
+  assert.equal(classify('/etc/hosts', ['/data/real/sub'], roots), 'hidden');
+  assert.equal(classify('/etc/hosts', ['/home/me/link/sub'], roots), 'hidden');
 });
 
 test('a changed line counts as one added and one removed, as git counts it', () => {

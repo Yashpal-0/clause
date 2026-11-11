@@ -117,12 +117,12 @@ describe('the file bar at the top of a pending file', () => {
     assert.equal(row[4]?.title, 'Claude created this file');
   });
 
-  it('leaves a file of another project with Discard file and Keep file, and does not count it', async () => {
+  it('leaves a file of another project with no file bar, and does not count it', async () => {
     const [first, second] = await seedFiles(2);
     const other = seedEditedElsewhere('other.txt', BEFORE, AFTER, null);
     await waitFor('the other project\'s file to be known', () => pendingAt(api, other) !== undefined);
 
-    assert.deepEqual((await barOf(other)).map((item) => item.command), ['clause.discardFile', 'clause.keepFile']);
+    assert.deepEqual((await barOf(other)).map((item) => item.command), []);
     assert.equal((await barOf(first!))[1]?.title, 'File 1 of 2');
     assert.equal((await barOf(second!))[1]?.title, 'File 2 of 2');
   });

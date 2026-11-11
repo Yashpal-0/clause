@@ -28,7 +28,7 @@
 import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { reverseApply } from './reverse-diff.mjs';
-import { isSessionDir, openStore } from './store.mjs';
+import { canonicalPath, isSessionDir, openStore } from './store.mjs';
 
 /**
  * The tools whose changes are tracked from the exact bytes before the call. Changes made through
@@ -134,6 +134,8 @@ function stageBeforeEdit(store, input) {
   const path = editedPath(input);
   const key = toolCallKey(input);
   if (path === null || key === null) return;
+  const dir = agentDir(input);
+  if (dir === null || !isInsideDir(dir, path)) return;
   // Staged even if the file is already pending: the user may press Keep on
   // everything while a permission prompt is open, and then this is the only
   // record of what the file looked like before this edit.
@@ -150,6 +152,9 @@ function promoteAfterEdit(store, input) {
   const key = toolCallKey(input);
   if (path === null || key === null) return;
   try {
+    const dir = agentDir(input);
+    if (dir === null || !isInsideDir(dir, path)) return;
+
     // A write held for review leaves the file untouched.
     if (input.tool_response?.staged === true) return;
 
@@ -221,6 +226,23 @@ function noteSession(store, event, path, dir) {
 }
 
 /**
+ * The directory where the agent runs.
+ * @param {HookInput} input
+ * @returns {string | null}
+ */
+function agentDir(input) {
+  const envDir = process.env.CLAUDE_PROJECT_DIR;
+  if (typeof envDir === 'string' && envDir !== '' && isAbsolute(envDir) && isSessionDir(envDir)) {
+    return canonicalDir(envDir);
+  }
+  const cwd = typeof input.cwd === 'string' && input.cwd !== '' && isAbsolute(input.cwd) ? input.cwd : process.cwd();
+  if (isAbsolute(cwd)) {
+    return canonicalDir(cwd);
+  }
+  return null;
+}
+
+/**
  * `CLAUDE_PROJECT_DIR` is the folder Claude Code was started in and does not follow `cd`; the
  * payload's `cwd` does, so it only stands in when the variable is missing.
  * @param {HookInput} input
@@ -270,6 +292,8 @@ function dropStagedEdit(store, input) {
  * @param {HookInput} input
  */
 function trackShellEdits(store, input) {
+  const dir = agentDir(input);
+  if (dir === null) return;
   const report = input.tool_response?.bashEditDiff;
   const files = report?.files;
   if (!Array.isArray(files)) return;
@@ -290,6 +314,7 @@ function trackShellEdits(store, input) {
 
   for (const edit of edits) {
     if (edit === null) continue;
+    if (!isInsideDir(dir, edit.path)) continue;
     if (edit.baseline === null) {
       // Already pending, or only a mode change: addSessionDir leaves a file without an entry alone.
       noteSession(store, 'bash', edit.path, sessionDir(input));
@@ -534,6 +559,26 @@ function canonicalDir(dir) {
 function isInside(dir, path) {
   const rel = relative(dir, path);
   return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+/**
+ * Whether `path` is inside `dir` (directly or in a subdirectory).
+ * @param {string | null} dir
+ * @param {string | null} path
+ * @returns {boolean}
+ */
+export function isInsideDir(dir, path) {
+  if (typeof dir !== 'string' || typeof path !== 'string' || dir === '' || path === '') return false;
+  const resolvedDir = resolve(dir);
+  const resolvedPath = resolve(path);
+  if (isInside(resolvedDir, resolvedPath)) return true;
+  try {
+    const cDir = canonicalDir(resolvedDir);
+    const cPath = canonicalPath(resolvedPath);
+    return isInside(cDir, cPath);
+  } catch {
+    return false;
+  }
 }
 
 main().catch(() => {

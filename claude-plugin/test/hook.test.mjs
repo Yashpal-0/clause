@@ -970,14 +970,26 @@ const sessionsOf = (store, file) => store.readSessionDirs(store.idFor(file));
 const startedIn = (project) => ({ CLAUDE_PROJECT_DIR: project });
 
 test('the first edit records the folder the session was started in', (t) => {
+  const { store, run } = setup(t);
+  const project = tempDir(t);
+  const file = join(project, 'a.txt');
+  writeFileSync(file, 'v0');
+
+  assertSilentSuccess(editFile({ work: project, run }, file, 'v1', 'toolu_1', startedIn(project)));
+
+  assert.deepEqual(sessionsOf(store, file), [project]);
+});
+
+test('an edit outside the directory where the agent runs is not tracked', (t) => {
   const { work, store, run } = setup(t);
   const project = tempDir(t);
-  const file = join(work, 'a.txt');
+  const file = join(work, 'outside.txt');
   writeFileSync(file, 'v0');
 
   assertSilentSuccess(editFile({ work, run }, file, 'v1', 'toolu_1', startedIn(project)));
 
-  assert.deepEqual(sessionsOf(store, file), [project]);
+  assert.equal(store.readEntry(store.idFor(file)), null);
+  assert.deepEqual(sessionsOf(store, file), []);
 });
 
 test('without CLAUDE_PROJECT_DIR the folder is the cwd in the payload', (t) => {
@@ -1009,22 +1021,23 @@ test('a symlinked folder is recorded as its real path', (t) => {
   const project = tempDir(t);
   const link = join(work, 'link');
   symlinkSync(project, link);
-  const file = join(work, 'a.txt');
+  const file = join(link, 'a.txt');
   writeFileSync(file, 'v0');
 
-  editFile({ work, run }, file, 'v1', 'toolu_1', startedIn(link));
+  assertSilentSuccess(editFile({ work: link, run }, file, 'v1', 'toolu_1', startedIn(link)));
 
   assert.deepEqual(sessionsOf(store, file), [project]);
 });
 
 test('an edit from another folder adds it, and one from a folder already listed writes nothing', (t) => {
   const { root, work, store, run } = setup(t);
-  const [first, second] = [tempDir(t), tempDir(t)];
-  const file = join(work, 'a.txt');
+  const sub = join(work, 'sub');
+  mkdirSync(sub);
+  const file = join(sub, 'a.txt');
   writeFileSync(file, 'v0');
-  editFile({ work, run }, file, 'v1', 'toolu_1', startedIn(first));
-  editFile({ work, run }, file, 'v2', 'toolu_2', startedIn(second));
-  assert.deepEqual(sessionsOf(store, file), [first, second]);
+  editFile({ work: sub, run }, file, 'v1', 'toolu_1', startedIn(sub));
+  editFile({ work, run }, file, 'v2', 'toolu_2', startedIn(work));
+  assert.deepEqual(sessionsOf(store, file), [sub, work]);
   assert.equal(store.readEntry(store.idFor(file))?.base?.toString(), 'v0');
 
   const record = join(root, 'entries', store.idFor(file), 'sessions');
@@ -1032,23 +1045,23 @@ test('an edit from another folder adds it, and one from a folder already listed 
   utimesSync(record, past, past);
   const before = statSync(record);
 
-  editFile({ work, run }, file, 'v3', 'toolu_3', startedIn(first));
+  editFile({ work: sub, run }, file, 'v3', 'toolu_3', startedIn(sub));
 
   const after = statSync(record);
   assert.equal(after.ino, before.ino);
   assert.equal(after.mtimeMs, before.mtimeMs);
-  assert.deepEqual(sessionsOf(store, file), [first, second]);
+  assert.deepEqual(sessionsOf(store, file), [sub, work]);
 });
 
 test('a file pending since before folders were recorded gets one on its next edit', (t) => {
-  const { work, store, run } = setup(t);
+  const { store, run } = setup(t);
   const project = tempDir(t);
-  const file = join(work, 'a.txt');
+  const file = join(project, 'a.txt');
   writeFileSync(file, 'v0');
   store.createEntry({ path: file, existed: true, base: Buffer.from('v0') });
   assert.deepEqual(sessionsOf(store, file), []);
 
-  editFile({ work, run }, file, 'v1', 'toolu_1', startedIn(project));
+  editFile({ work: project, run }, file, 'v1', 'toolu_1', startedIn(project));
 
   assert.deepEqual(sessionsOf(store, file), [project]);
   assert.equal(store.readEntry(store.idFor(file))?.base?.toString(), 'v0');
@@ -1056,11 +1069,12 @@ test('a file pending since before folders were recorded gets one on its next edi
 
 test('an edit that changed nothing, failed, or was held for review adds no folder', (t) => {
   const { work, store, run } = setup(t);
-  const [first, second] = [tempDir(t), tempDir(t)];
-  const file = join(work, 'a.txt');
+  const sub = join(work, 'sub');
+  mkdirSync(sub);
+  const file = join(sub, 'a.txt');
   writeFileSync(file, 'v0');
-  editFile({ work, run }, file, 'v1', 'toolu_1', startedIn(first));
-  const other = startedIn(second);
+  editFile({ work: sub, run }, file, 'v1', 'toolu_1', startedIn(sub));
+  const other = startedIn(work);
 
   editFile({ work, run }, file, 'v1', 'toolu_2', other);
 
@@ -1071,7 +1085,7 @@ test('an edit that changed nothing, failed, or was held for review adds no folde
   writeFileSync(file, 'changed by something other than the tool');
   run('post', post(work, file, { id: 'toolu_4', response: { staged: true } }), other);
 
-  assert.deepEqual(sessionsOf(store, file), [first]);
+  assert.deepEqual(sessionsOf(store, file), [sub]);
 });
 
 test('a folder that cannot be recorded is skipped, and the entry is still made', (t) => {
@@ -1090,15 +1104,16 @@ test('a folder that cannot be recorded is skipped, and the entry is still made',
 
 test('a folder that cannot be written is logged, and the entry and its touch are still made', (t) => {
   const { root, work, store, run } = setup(t);
-  const [first, second] = [tempDir(t), tempDir(t)];
-  const file = join(work, 'a.txt');
+  const sub = join(work, 'sub');
+  mkdirSync(sub);
+  const file = join(sub, 'a.txt');
   writeFileSync(file, 'v0');
-  editFile({ work, run }, file, 'v1', 'toolu_1', startedIn(first));
+  editFile({ work: sub, run }, file, 'v1', 'toolu_1', startedIn(sub));
   const record = join(root, 'entries', store.idFor(file), 'sessions');
   rmSync(record); // the first edit wrote one; a directory in its place makes the next write fail
   mkdirSync(record);
 
-  assertSilentSuccess(editFile({ work, run }, file, 'v2', 'toolu_2', startedIn(second)));
+  assertSilentSuccess(editFile({ work, run }, file, 'v2', 'toolu_2', startedIn(work)));
 
   // Read before readEntry: reading the directory logs an error of its own.
   assert.match(logOf(root), / post\b/);
@@ -1108,28 +1123,41 @@ test('a folder that cannot be written is logged, and the entry and its touch are
 });
 
 test('a file created by a shell command records the folder', (t) => {
+  const { store, run } = setup(t);
+  const project = tempDir(t);
+  const file = join(project, 'created.txt');
+  writeFileSync(file, 'new1\n');
+
+  const files = [{ filePath: file, hunks: [hunk(0, 0, 1, 1, '+new1')], created: true }];
+  assertSilentSuccess(run('bash', bashPost(project, files), startedIn(project)));
+
+  assert.deepEqual(sessionsOf(store, file), [project]);
+});
+
+test('a shell command modifying a file outside the session directory is not tracked', (t) => {
   const { work, store, run } = setup(t);
   const project = tempDir(t);
-  const file = join(work, 'created.txt');
+  const file = join(work, 'outside.txt');
   writeFileSync(file, 'new1\n');
 
   const files = [{ filePath: file, hunks: [hunk(0, 0, 1, 1, '+new1')], created: true }];
   assertSilentSuccess(run('bash', bashPost(work, files), startedIn(project)));
 
-  assert.deepEqual(sessionsOf(store, file), [project]);
+  assert.equal(store.readEntry(store.idFor(file)), null);
 });
 
 test('a shell command that edits a pending file adds its folder and keeps the older baseline', (t) => {
   const { work, store, run } = setup(t);
-  const [first, second] = [tempDir(t), tempDir(t)];
-  const file = join(work, 'a.txt');
-  store.createEntry({ path: file, existed: true, base: Buffer.from('v0\nx\n'), sessionDir: first });
+  const sub = join(work, 'sub');
+  mkdirSync(sub);
+  const file = join(sub, 'a.txt');
+  store.createEntry({ path: file, existed: true, base: Buffer.from('v0\nx\n'), sessionDir: sub });
   writeFileSync(file, 'v2\nx\n');
 
   const files = [{ filePath: file, hunks: [hunk(1, 2, 1, 2, '-v1', '+v2', ' x')] }];
-  assertSilentSuccess(run('bash', bashPost(work, files), startedIn(second)));
+  assertSilentSuccess(run('bash', bashPost(work, files), startedIn(work)));
 
-  assert.deepEqual(sessionsOf(store, file), [first, second]);
+  assert.deepEqual(sessionsOf(store, file), [sub, work]);
   assert.equal(store.readEntry(store.idFor(file))?.base?.toString(), 'v0\nx\n');
 });
 

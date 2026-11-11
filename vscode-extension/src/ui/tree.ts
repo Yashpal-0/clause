@@ -4,7 +4,7 @@ import { anchorLine, blockLabel } from '../nav.ts';
 import type { PendingFile, PendingModel } from '../pending.ts';
 import { lineStats, statsText } from '../present.ts';
 import type { BlockTarget, FileTarget, GroupTarget } from '../targets.ts';
-import { partition, whereIs } from './scope.ts';
+import { isInScope, partition, whereIs } from './scope.ts';
 
 export type TreeNode = FileTarget | BlockTarget | GroupTarget;
 
@@ -33,7 +33,7 @@ export class PendingTree implements vscode.TreeDataProvider<TreeNode>, vscode.Di
     if (node.kind === 'block') return [];
 
     const file = this.#model.fileById(node.id);
-    if (file === undefined || !hasBlocks(file)) return [];
+    if (file === undefined || !hasBlocks(file) || !isInScope(file)) return [];
     return file.state.blocks.map((block) => ({ kind: 'block', id: file.id, block }));
   }
 

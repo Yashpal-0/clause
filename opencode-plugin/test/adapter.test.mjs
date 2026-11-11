@@ -139,16 +139,31 @@ test('without the session record, the folder the plugin was loaded in stands in'
 });
 
 test('a later edit adds to the pending file instead of replacing its baseline, and a second session folder is listed', async (t) => {
-  const other = tempDir(t);
-  const env = await start(t, { sessions: { ses_2: other } });
-  const file = join(env.work, 'a.txt');
+  /** @type {Record<string, string>} */
+  const sessions = {};
+  const env = await start(t, { sessions });
+  const sub = join(env.work, 'sub');
+  mkdirSync(sub, { recursive: true });
+  sessions.ses_2 = sub;
+  const file = join(sub, 'a.txt');
   writeFileSync(file, 'v0\n');
 
   await call(env, { tool: 'write', id: 'call_1', input: { path: file, content: 'v1\n' }, run: () => writeFileSync(file, 'v1\n') });
   await call(env, { tool: 'write', id: 'call_2', session: 'ses_2', input: { path: file, content: 'v2\n' }, run: () => writeFileSync(file, 'v2\n') });
 
   assert.equal(text(entryOf(env, file)?.base), 'v0\n');
-  assert.deepEqual(entryOf(env, file)?.sessionDirs, [env.work, other]);
+  assert.deepEqual(entryOf(env, file)?.sessionDirs, [env.work, sub]);
+});
+
+test('an edit outside the session directory is not tracked', async (t) => {
+  const other = tempDir(t);
+  const env = await start(t, { sessions: { ses_2: other } });
+  const file = join(env.work, 'a.txt');
+  writeFileSync(file, 'v0\n');
+
+  await call(env, { tool: 'write', id: 'call_outside', session: 'ses_2', input: { path: file, content: 'v1\n' }, run: () => writeFileSync(file, 'v1\n') });
+
+  assert.equal(entryOf(env, file), null);
 });
 
 test('an edit that changes nothing leaves no entry behind', async (t) => {

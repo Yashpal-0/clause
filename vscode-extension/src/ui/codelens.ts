@@ -5,7 +5,7 @@ import type { PendingFile, PendingModel } from '../pending.ts';
 import { lensPlan } from '../present.ts';
 import type { BlockTarget, FileTarget } from '../targets.ts';
 import type { Insets } from './insets.ts';
-import { visible } from './scope.ts';
+import { isInScope, visible } from './scope.ts';
 
 /**
  * The bar above every pending block, in the words of the inset's bar:
@@ -28,7 +28,7 @@ export class PendingCodeLenses implements vscode.CodeLensProvider, vscode.Dispos
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     const file = this.#model.fileForUri(document.uri);
-    if (file === undefined) return [];
+    if (file === undefined || !isInScope(file)) return [];
     return [...this.#fileBar(file), ...this.#blockBars(file, document)];
   }
 

@@ -240,7 +240,7 @@ export function classify(path: string, sessionDirs: readonly string[], roots: re
   if (roots.length === 0) return 'here';
   const folders = roots.map((root) => resolve(root));
   if (folders.some((folder) => isWithin(dirname(path), folder))) return 'here';
-  return sessionDirs.some((dir) => folders.some((folder) => isWithin(dir, folder))) ? 'outside' : 'hidden';
+  return 'hidden';
 }
 
 /** Whether `path` is `parent` or below it. A folder that merely starts with the same characters is not. */

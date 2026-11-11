@@ -118,17 +118,15 @@ describe('the mark on files that have changes waiting', () => {
     assert.equal(api.explorer.provideFileDecoration(inAnotherScheme), undefined, 'a folder in another scheme');
   });
 
-  it('does not colour the folders of a file outside the workspace folders', async () => {
+  it('does not colour or mark a file outside the workspace folders', async () => {
     const outside = seedEditedElsewhere('c.txt', BEFORE, ONE_BLOCK);
-    const named = await pendingPath(outside);
-    await waitFor('the file to be announced', () => heard.announced.length > 0);
+    await waitFor('the model to hold the file', () => api.model.files().length === 1);
     await sleep(300);
 
-    assert.ok(decorationOf(outside), 'control: the file itself is marked');
+    assert.equal(decorationOf(outside), undefined);
     assert.equal(decorationOf(dirname(outside)), undefined);
     assert.equal(decorationOf(dirname(dirname(outside))), undefined, 'the folder that holds it and sits next to the workspace folder');
     assert.equal(decorationOf(workspaceDir()), undefined, 'the workspace folder, which holds none of the pending files');
-    assert.deepEqual(heard.announced.map(sorted), [[named]]);
   });
 
   it('keeps a folder coloured until the last file in it has nothing waiting', async () => {

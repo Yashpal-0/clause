@@ -807,7 +807,7 @@ function uniqueSuffix() {
  * @param {string} path absolute
  * @returns {string} path with every existing symlink resolved
  */
-function canonicalPath(path) {
+export function canonicalPath(path) {
   if (!isAbsolute(path)) throw new TypeError(`path must be absolute: ${path}`);
   let existing = resolve(path);
   /** @type {string[]} */

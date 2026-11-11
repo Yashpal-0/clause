@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { anchorLine, blockToShow } from '../nav.ts';
 import type { PendingModel, PendingTouch } from '../pending.ts';
-import { whereIs } from './scope.ts';
+import { isInScope, whereIs } from './scope.ts';
 
 /**
  * How long after Claude's last edit the editor waits before it opens the file.
@@ -87,7 +87,7 @@ export class Follow implements vscode.Disposable {
     if (!this.#enabled()) return;
     const file = this.#model.fileById(touch.id);
     // No text, no block to show: the file is gone, or too big or not text to compare by line.
-    if (file === undefined || file.state.cur === null || !whereIs(file).inside) return;
+    if (file === undefined || file.state.cur === null || !isInScope(file)) return;
 
     const lineCount = file.state.cur.lines.length;
     const block = blockToShow(file.state.blocks, touch.line, lineCount);
