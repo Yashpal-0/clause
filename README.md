@@ -326,6 +326,12 @@ AGY         ──plugin─▶  entries/<id>/{base,meta.json,touched,sessions}
   crash it, reboot: the same blocks are there when you reopen. A block goes away only when you Keep
   or Discard it, or when the file really no longer differs there (for example, Claude undid its own
   change).
+- Pending changes belong to the branch they were made on. Switch branch and the review shows that
+  branch's pending files only; switch back and the earlier ones are waiting again, untouched. This
+  needs the file to be inside a git repository; outside one, on a detached HEAD, and in a
+  repository using git's reftable ref format, nothing changes. A branch switch is noticed while
+  the editor is open, so the list and the marks follow it without a reload. A file changed on two
+  branches keeps one baseline per branch.
 - Edits are recorded only after the tool call succeeded, so a denied or failed edit creates nothing.
 - The next time you send Claude a prompt, it is told which files lost changes to a Discard, so it
   does not build on code that is gone. The note does not claim the changes were Claude's, because a
@@ -508,8 +514,8 @@ first, which can be git.
   up to four child hook processes at once; pre/post hooks have a 60-second timeout. The adapter
   logs its failures to `errors.log` and exits 0.
 - A patch is skipped if any original file cannot be captured, including files over 64 MiB,
-  or if a path's real identity changes between hooks. Deleting or moving a leaf symlink is
-  skipped because Clause stores file bytes, not symlinks. An unchanged symlink used for an
+  or if a path's real identity or its git branch changes between hooks. Deleting or moving a leaf
+  symlink is skipped because Clause stores file bytes, not symlinks. An unchanged symlink used for an
   ordinary update is tracked under its target. Environment-selected patches are not tracked.
 - Edits made by another process between the before/after snapshots can enter the same pending
   change. Discard reverts those edits too. Avoid editing the same file while a patch runs.
@@ -544,10 +550,11 @@ each file Claude changed, as it was before, until you Keep or Discard. That incl
 `.env` if Claude edits them. Next to each copy is a `touched` note with a time, a tool call id and a
 line number, and no path or content, and a `sessions` note with the folders Claude sessions were
 started in (paths, never file contents). Each Discard is appended to `discards.jsonl` (time, file
-path, and the kind of block with its line number, never content), and for each Claude session the
-plugin keeps how far it has read that log, which is how your next prompt can tell Claude what you
-discarded. Everything stays on your machine, in files and directories only you can read (modes 0600
-and 0700). Hook failures are written to `errors.log` in the same folder, without file contents.
+path, the branch it happened on, and the kind of block with its line number, never content), and for
+each Claude session and branch the plugin keeps how far it has read that log, which is how your next
+prompt can tell Claude what you discarded. Everything stays on your machine, in files and
+directories only you can read (modes 0600 and 0700). Hook failures are written to `errors.log` in the
+same folder, without file contents.
 The Codex, OpenCode, OMP and AGY plugins use the same store and send nothing anywhere: each starts
 `node` on the hook and gives it the path of each edited file and the folder of the session.
 
@@ -629,8 +636,9 @@ binary in a private home against a scripted model, and are skipped when it is no
 `OPENCODE_BIN` names a binary that is not on the `PATH`.
 
 The Codex plugin's tests (`codex-plugin/test/*.test.mjs`) use private stores and native hook
-payloads. Its end-to-end tests run the real `codex` with a scripted model and are skipped when
-it is not installed; `CLAUSE_CODEX_BIN` names a binary that is not on the `PATH`.
+payloads. Its end-to-end tests (`npm run test:codex:e2e`, not part of `npm test`) run the real
+`codex` with a scripted model and are skipped when it is not installed; `CLAUSE_CODEX_BIN` names
+a binary that is not on the `PATH`.
 
 ## License
 
