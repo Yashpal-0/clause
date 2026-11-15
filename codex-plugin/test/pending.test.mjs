@@ -85,3 +85,21 @@ test('corrupt session metadata never lets a resumed call replace the original ro
   assert.throws(() => sessionRoot(box.store, 'one', join(box.work, 'other')), /invalid Codex session root/);
   assert.equal(readFileSync(path, 'utf8'), '{"root":"relative"}');
 });
+
+test('only an executed call completes, whichever frame Codex puts its result in', (t) => {
+  const box = sandbox(t);
+  const [file] = box.call.files;
+  const results = {
+    direct: ['Exit code: 0\nWall time: 0.1 seconds\nOutput:\nSuccess. Updated the following files:\nM a.txt\n', [file.path]],
+    unifiedExec: ['Wall time: 0.0000 seconds\nOutput:\nExit code: 0\nWall time: 0 seconds\nOutput:\nSuccess. Updated the following files:\nM a.txt\n', [file.path]],
+    failedHalfway: ['Wall time: 0.0000 seconds\nOutput:\nExit code: 1\nWall time: 0 seconds\nOutput:\nFailed to move a.txt\n', [file.path]],
+    refused: ['patch rejected: writing is blocked by read-only sandbox; rejected by user approval settings', []],
+    invalid: ['apply_patch verification failed: Failed to find expected lines in a.txt:\nmissing', []],
+  };
+  for (const [name, [output, completed]] of Object.entries(results)) {
+    const call = saveCall(box.store, 'one', { ...box.call, key: `stage-${name}`, callId: `call-${name}` });
+    appendFileSync(box.transcriptPath,
+      `${JSON.stringify({ type: 'response_item', payload: { type: 'function_call_output', call_id: call.callId, output } })}\n`);
+    assert.deepEqual(completedPaths(call), completed, name);
+  }
+});

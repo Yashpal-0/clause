@@ -11,6 +11,7 @@ const MAX_RECORD_BYTES = 4 * 1024 * 1024;
 const MAX_FILES = 4096;
 const MAX_PATH_LENGTH = 4096;
 const MAX_ID_LENGTH = 1024;
+const EXECUTION_FRAME = /^(?:Wall time:[^\n]*\r?\nOutput:\r?\n)?Exit code: -?\d+\r?\nWall time:[^\n]*\r?\nOutput:\r?\n/;
 
 /** @typedef {{ root: string }} Store */
 /** @typedef {{ path: string, key: string, identity: string }} CallFile */
@@ -78,7 +79,8 @@ export function completedPaths(call) {
       if (row?.type !== 'response_item' || result?.call_id !== call.callId ||
           !['custom_tool_call_output', 'function_call_output'].includes(result?.type)) continue;
       // Execution results carry this frame; denied calls do not, so their snapshots must not be promoted.
-      if (typeof result.output !== 'string' || !/^Exit code: -?\d+\r?\nWall time:[^\n]*\r?\nOutput:\r?\n/.test(result.output)) return [];
+      // Unified exec wraps it in a frame of its own, which a refused patch does not get either.
+      if (typeof result.output !== 'string' || !EXECUTION_FRAME.test(result.output)) return [];
       return call.files.map((file) => file.path);
     }
     return null;
