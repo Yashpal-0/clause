@@ -12,9 +12,9 @@ Pending edits and discard cursors survive session restarts.
 The manifest is `../.codex-plugin/plugin.json`. Codex CLI 0.166.0 loads command hooks from that
 format; its newer root `plugin.json` format does not load host hooks.
 
-Install: [Quick start, step 7](../README.md#quick-start). Codex CLI 0.166.0 was tested; use that
-version or newer. Restart Codex after installing, then open `/hooks` and review and trust the
-Clause commands before using them. Codex's [hook trust review](https://learn.chatgpt.com/docs/hooks)
+Install: [Quick start, step 7](../README.md#quick-start). Codex CLI 0.166.0 and 0.169.0 were
+tested; use 0.166.0 or newer. Restart Codex after installing, then open `/hooks` and review and
+trust the Clause commands before using them. Codex's [hook trust review](https://learn.chatgpt.com/docs/hooks)
 is required.
 
 The plugin needs this repository, including `claude-plugin/`, and `node` on the `PATH` Codex runs

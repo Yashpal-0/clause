@@ -170,8 +170,8 @@ after installing. To update later, run `omp plugin upgrade clause`.
 **7. Optional: Codex**
 
 Codex changes made through `apply_patch` go through the same review, including added, deleted
-and moved files. Use Codex CLI 0.166.0 or newer; 0.166.0 was tested. Add this repository's
-marketplace, then install its plugin:
+and moved files. Use Codex CLI 0.166.0 or newer; 0.166.0 and 0.169.0 were tested. Add this
+repository's marketplace, then install its plugin:
 
 ```sh
 codex plugin marketplace add Yashpal-0/clause --ref master
@@ -563,8 +563,8 @@ Deleting the folder clears all pending state. Every file keeps whatever it conta
 ## Requirements
 
 - Claude Code (developed against 2.1.305). Tested with the CLI.
-- Codex CLI 0.166.0 or newer, only for the Codex plugin; tested with 0.166.0. Its local command
-  hooks require trust review through `/hooks`, and `node` on Codex's `PATH`.
+- Codex CLI 0.166.0 or newer, only for the Codex plugin; tested with 0.166.0 and 0.169.0. Its
+  local command hooks require trust review through `/hooks`, and `node` on Codex's `PATH`.
 - Node.js on the `PATH` of the process that starts Claude Code: the hooks run `node`. Tested on
   Node 24; the plugin uses only Node's built-in modules.
 - VS Code 1.100 or newer, or Cursor. Tested on Linux with VS Code 1.142. In Cursor 3.25.9 the
