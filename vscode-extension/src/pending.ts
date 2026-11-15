@@ -132,6 +132,8 @@ export class PendingModel implements vscode.Disposable {
   /** What Ctrl+Z can take back, by entry id, newest last. Only this window's, and gone when it reloads. */
   readonly #undoable = new Map<string, Undoable[]>();
   readonly #subscriptions: vscode.Disposable[] = [];
+  /** Watches the HEAD of each repository the model has looked at, so a branch switch re-lists. */
+  readonly #headWatches = new Map<string, DirectoryWatch>();
   readonly #dirWatches = new Map<string, { watch: DirectoryWatch | undefined; ids: Set<string> }>();
   readonly #storeSync = new Delayed(() => this.#guard('store sync', () => this.#runStoreSync()), STORE_EVENT_DELAY_MS);
   readonly #storeSyncIds = new Set<string>();
@@ -156,6 +158,7 @@ export class PendingModel implements vscode.Disposable {
       vscode.workspace.onDidCloseTextDocument((document) => this.#guard('close', () => this.#onClose(document))),
       vscode.workspace.onDidChangeTextDocument((event) => this.#guard('change', () => this.#onChange(event))),
       vscode.workspace.onDidSaveTextDocument((document) => this.#guard('save', () => this.#onSave(document))),
+      vscode.workspace.onDidChangeWorkspaceFolders(() => this.#guard('folders', () => this.#resync())),
       vscode.window.onDidChangeWindowState((state) => {
         if (state.focused) this.#guard('focus', () => this.#resync());
       }),
@@ -163,6 +166,7 @@ export class PendingModel implements vscode.Disposable {
     // Entries appearing and going away; what happens inside an entry is watched per entry.
     this.#storeWatch = watchDirectory(this.#store.ensureEntriesDir(), (name) => this.#onStoreEvent(name));
     this.#syncAll();
+    this.#watchHeads();
     this.#started = true;
   }
 
@@ -304,6 +308,13 @@ export class PendingModel implements vscode.Disposable {
       // Used up even when it cannot be done, so that a refusal never stands between Ctrl+Z and the editor's undo.
       history.pop();
       if (history.length === 0) this.#undoable.delete(id);
+      // Undo writes the entry of the branch it was made on. After a switch the
+      // text in this editor is another branch's, so the editor's own undo wins.
+      try {
+        if (this.#store.idFor(last.entry.path) !== id) return null;
+      } catch {
+        return null;
+      }
 
       const result = last.wrote === null ? await this.#restoreEntry(id, last) : await this.#restoreBaseline(id, last);
       if (!last.editorUndo) return result;
@@ -323,6 +334,8 @@ export class PendingModel implements vscode.Disposable {
     }
     this.#storeSync.cancel();
     this.#storeWatch?.close();
+    for (const watch of this.#headWatches.values()) watch.close();
+    this.#headWatches.clear();
     for (const { watch } of this.#dirWatches.values()) watch?.close();
     this.#dirWatches.clear();
     for (const subscription of this.#subscriptions) subscription.dispose();
@@ -335,8 +348,22 @@ export class PendingModel implements vscode.Disposable {
   #locked(id: string, operation: (tracked: Tracked) => Promise<OpResult>): Promise<OpResult> {
     return this.#queue.run(id, async () => {
       const tracked = this.#tracked.get(id);
-      return tracked === undefined ? GONE : operation(tracked);
+      if (tracked === undefined) return GONE;
+      if (!this.#belongsToCurrentBranch(tracked)) {
+        this.#drop(tracked);
+        return GONE;
+      }
+      return operation(tracked);
     });
+  }
+
+  /** Whether the file still belongs to the entry being operated on, not to one of another branch. */
+  #belongsToCurrentBranch(tracked: Tracked): boolean {
+    try {
+      return this.#store.idFor(tracked.path) === tracked.id;
+    } catch {
+      return false;
+    }
   }
 
   /** One file after another, so that a problem with one does not stop the rest. */
@@ -613,6 +640,23 @@ export class PendingModel implements vscode.Disposable {
       if (tracked !== undefined) this.#drop(tracked);
       return;
     }
+    // A store event can name the path-only id of an entry the branch has since
+    // taken over. Load the entry that now holds the file, or leave another
+    // branch's entry in the store for that branch.
+    let current: string;
+    try {
+      current = this.#store.idFor(entry.path);
+    } catch {
+      current = id;
+    }
+    if (current !== id) {
+      if (this.#store.readMeta(current) !== null) {
+        this.#syncOne(current);
+      } else if (tracked !== undefined) {
+        this.#drop(tracked);
+      }
+      return;
+    }
     if (tracked === undefined) {
       this.#noteTouch(this.#load(entry, null), true);
       return;
@@ -667,6 +711,7 @@ export class PendingModel implements vscode.Disposable {
     };
     this.#tracked.set(tracked.id, tracked);
     this.#watchFile(tracked);
+    this.#watchHead(tracked.path);
     this.#enqueueRefresh(tracked);
     return tracked;
   }
@@ -707,11 +752,51 @@ export class PendingModel implements vscode.Disposable {
 
   /** Looks again at everything, for moments when a watcher may have missed something. */
   #resync(): void {
+    // The branch decides which entries exist, so the cached document ids are
+    // from the branch before it.
+    this.#ids.clear();
     this.#syncAll();
+    this.#watchHeads();
     for (const tracked of this.#tracked.values()) {
       this.#watchFile(tracked);
       this.#scheduleRefresh(tracked);
     }
+  }
+
+  /**
+   * Watches each repository's git directory for HEAD moving, which is what a
+   * branch switch does. The file itself cannot be watched: git replaces it by
+   * rename, and a watch on the old file then goes quiet.
+   */
+  #watchHeads(): void {
+    for (const tracked of this.#tracked.values()) this.#watchHead(tracked.path);
+    // A repository with nothing pending on this branch has no tracked path to
+    // name it, and the first switch to a branch that does must still be seen.
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      if (folder.uri.scheme === 'file') this.#watchHead(folder.uri.fsPath);
+    }
+  }
+
+  /** Watches the repository of `path` for HEAD moving, once per repository. */
+  #watchHead(path: string): void {
+    const gitDir = this.#store.gitDirFor(path);
+    if (gitDir === null || this.#headWatches.has(gitDir)) return;
+    const watch = watchDirectory(gitDir, (name) => {
+      if (name === 'HEAD' || name === null) this.#guard('branch', () => this.#onBranchChange());
+    });
+    if (watch !== undefined) this.#headWatches.set(gitDir, watch);
+  }
+
+  /**
+   * The branch moved, so this branch's entries are a different set. The files
+   * are not touched by the switch for entries of the new branch, so nothing
+   * else would report it.
+   */
+  #onBranchChange(): void {
+    this.#ids.clear();
+    this.#syncAll();
+    this.#watchHeads();
+    for (const tracked of this.#tracked.values()) this.#scheduleRefresh(tracked);
   }
 
   // ---- files and documents ----------------------------------------------------------------------------------------
