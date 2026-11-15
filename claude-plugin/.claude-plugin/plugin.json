@@ -1,7 +1,7 @@
 {
   "name": "clause",
   "description": "Keeps every edit Claude makes pending until you Keep or Discard it in VS Code or Cursor.",
-  "version": "0.1.0",
+  "version": "0.6.0",
   "author": { "name": "Yashpal-0", "url": "https://github.com/Yashpal-0" },
   "homepage": "https://github.com/Yashpal-0/clause",
   "repository": "https://github.com/Yashpal-0/clause",
