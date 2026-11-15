@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { openStore } from '../../claude-plugin/store.mjs';
-import { tempDir } from '../../claude-plugin/test/helpers.mjs';
+import { initRepository, tempDir } from '../../claude-plugin/test/helpers.mjs';
 
 const REPO = fileURLToPath(new URL('../../', import.meta.url));
 const CODEX = process.env.CLAUSE_CODEX_BIN ?? 'codex';
@@ -102,12 +102,11 @@ plugins = true
   const options = { cwd: work, env };
   {
     const marketplace = join(root, 'marketplace');
-    for (const path of ['.codex-plugin/plugin.json', '.agents/plugins/marketplace.json',
-      'codex-plugin/hook.mjs', 'codex-plugin/hooks/hooks.json',
-      'claude-plugin/hook.mjs', 'claude-plugin/store.mjs', 'claude-plugin/reverse-diff.mjs']) {
+    for (const path of ['.codex-plugin/plugin.json', '.agents/plugins/marketplace.json']) {
       mkdirSync(join(marketplace, path, '..'), { recursive: true });
       cpSync(join(REPO, path), join(marketplace, path));
     }
+    for (const dir of ['claude-plugin', 'codex-plugin']) cpSync(join(REPO, dir), join(marketplace, dir), { recursive: true });
     const added = await command(['plugin', 'marketplace', 'add', marketplace, '--json'], options);
     assert.equal(added.status, 0, added.stderr);
     const catalog = JSON.parse(readFileSync(join(marketplace, '.agents/plugins/marketplace.json'), 'utf8'));
@@ -141,6 +140,11 @@ function patchCall(patch) {
       id: `item-${index}`, call_id: `call-${index}`, name: 'apply_patch',
       ...(tool.type === 'custom' ? { input: patch } : { arguments: JSON.stringify({ patch }) }) }];
   };
+}
+
+function shellPatchCall(patch) {
+  return (_body, index) => [{ type: 'function_call', id: `item-${index}`, call_id: `call-${index}`, name: 'exec_command',
+    arguments: JSON.stringify({ cmd: `apply_patch <<'PATCH'\n${patch}\nPATCH`, login: false }) }];
 }
 
 const done = () => [{ type: 'message', id: 'done', role: 'assistant',
@@ -260,3 +264,34 @@ test('real Codex settles a partial failure before another patch in the same turn
     assert.equal(context.store.readEntry(context.store.idFor(second))?.base?.toString(), 'B\n');
     context.checkServer();
   });
+
+for (const [kind, call] of [['apply_patch', patchCall], ['shell patch', shellPatchCall]]) {
+  test(`real Codex keeps ${kind} edits on the branch that made them`,
+    { skip: available.status !== 0, timeout: 120_000 }, async (t) => {
+      const patch = (before, after) => `*** Begin Patch\n*** Update File: a.txt\n@@\n-${before}\n+${after}\n*** End Patch`;
+      const context = await fixture(t, [call(patch('master', 'master edit')), done, call(patch('feature', 'feature edit')), done]);
+      const git = initRepository(context.work);
+      const file = join(context.work, 'a.txt');
+      writeFileSync(file, 'master\n');
+      const onMaster = context.store.idFor(file);
+      const first = await context.run('Edit on master.');
+      context.checkError();
+      assert.equal(first.status, 0, first.stderr + first.stdout);
+      assert.equal(context.store.readEntry(onMaster)?.base?.toString(), 'master\n', first.stdout);
+
+      git('checkout', '-q', '-b', 'feature');
+      assert.deepEqual(context.store.listEntries(), []);
+      writeFileSync(file, 'feature\n');
+      const second = await context.run('Edit on feature.');
+      context.checkError();
+      assert.equal(second.status, 0, second.stderr + second.stdout);
+      const onFeature = context.store.idFor(file);
+      assert.notEqual(onFeature, onMaster);
+      assert.equal(context.store.readEntry(onFeature)?.base?.toString(), 'feature\n', second.stdout);
+
+      git('checkout', '-q', 'master');
+      assert.deepEqual(context.store.listEntries().map((entry) => entry.id), [onMaster]);
+      assert.equal(context.store.readEntry(onMaster)?.base?.toString(), 'master\n');
+      context.checkServer();
+    });
+}

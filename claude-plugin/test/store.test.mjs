@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
   appendFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   statSync,
   symlinkSync,
   utimesSync,
@@ -14,7 +16,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { defaultRoot, openStore } from '../store.mjs';
-import { STORE_URL, runModule, tempDir } from './helpers.mjs';
+import { STORE_URL, initRepository, runModule, tempDir } from './helpers.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -59,6 +61,111 @@ test('idFor distinguishes different files and requires an absolute path', (t) =>
   assert.notEqual(store.idFor(join(work, 'a.txt')), store.idFor(join(work, 'b.txt')));
   assert.match(store.idFor(join(work, 'a.txt')), /^[0-9a-f]{64}$/);
   assert.throws(() => store.idFor('relative/a.txt'), /absolute/);
+});
+
+test('a pending file follows its branch: the same path has a different entry on each, and both come back', (t) => {
+  const { work, store } = setup(t);
+  const git = initRepository(work);
+  const file = join(work, 'a.txt');
+  writeFileSync(file, 'first branch');
+  const onMaster = store.idFor(file);
+  assert.equal(store.createEntry({ path: file, existed: true, base: Buffer.from('first branch') }), true);
+  assert.equal(store.listEntries().length, 1);
+
+  git('checkout', '-q', '-b', 'feature');
+  assert.notEqual(store.idFor(file), onMaster, 'a switch changes the entry the file belongs to');
+  assert.equal(store.listEntries().length, 0, "the other branch's change is not listed");
+  assert.equal(store.readEntry(onMaster)?.base?.toString(), 'first branch', 'and is still in the store');
+
+  writeFileSync(file, 'second branch');
+  assert.equal(store.createEntry({ path: file, existed: true, base: Buffer.from('second branch') }), true);
+  const onFeature = store.listEntries();
+  assert.equal(onFeature.length, 1);
+  assert.equal(store.readEntry(onFeature[0].id)?.base?.toString(), 'second branch');
+
+  git('checkout', '-q', 'master');
+  assert.equal(store.idFor(file), onMaster);
+  assert.deepEqual(store.listEntries().map((entry) => entry.id), [onMaster]);
+});
+
+test('a detached HEAD is not a branch, so it keeps the one path-only entry', (t) => {
+  const { work, store } = setup(t);
+  const git = initRepository(work);
+  const file = join(work, 'a.txt');
+  writeFileSync(file, 'x');
+  const onBranch = store.idFor(file);
+  git('checkout', '-q', '--detach', 'HEAD');
+  assert.notEqual(store.idFor(file), onBranch);
+  assert.equal(store.branchOf(file), null);
+  assert.equal(store.idFor(file), createHash('sha256').update(file).digest('hex'));
+});
+
+test('a reftable repository is not branch-scoped, because its HEAD file does not say which branch it is on', (t) => {
+  const { work, store } = setup(t);
+  mkdirSync(join(work, '.git'));
+  writeFileSync(join(work, '.git', 'HEAD'), 'ref: refs/heads/.invalid\n');
+  const file = join(work, 'a.txt');
+  assert.equal(store.branchOf(file), null);
+  assert.equal(store.idFor(file), createHash('sha256').update(file).digest('hex'));
+});
+
+test('an entry made before branches were recorded belongs to the first branch that looks at it', (t) => {
+  const { work, store } = setup(t);
+  initRepository(work);
+  const file = join(work, 'a.txt');
+  writeFileSync(file, 'x');
+  store.createEntry({ path: file, existed: true, base: Buffer.from('x') });
+  const legacy = store.idFor(file);
+  // Move it to the path-only id a store from before this change would have used.
+  const legacyId = createHash('sha256').update(file).digest('hex');
+  renameSync(join(store.root, 'entries', legacy), join(store.root, 'entries', legacyId));
+
+  assert.equal(store.idFor(file), legacy, 'asking for the id moves nothing');
+  assert.equal(existsSync(join(store.root, 'entries', legacyId)), true);
+  assert.deepEqual(store.listEntries().map((entry) => entry.id), [legacy], 'listing takes it over');
+  assert.equal(store.readEntry(legacy)?.base?.toString(), 'x', 'taken over, not lost');
+  assert.equal(existsSync(join(store.root, 'entries', legacyId)), false);
+});
+
+test('gitDirFor names the repository of a file, and nothing outside one', (t) => {
+  const { work, store } = setup(t);
+  initRepository(work);
+  const file = join(work, 'a.txt');
+  writeFileSync(file, 'x');
+  assert.equal(store.gitDirFor(file), join(work, '.git'));
+  assert.equal(store.gitDirFor(join(tempDir(t), 'outside.txt')), null);
+});
+
+test('a linked worktree and a submodule are on their own branches, not their parent repository\'s', (t) => {
+  const { work, store } = setup(t);
+  const git = initRepository(work);
+  const linked = join(tempDir(t), 'linked');
+  git('worktree', 'add', '-q', '-b', 'feature', linked);
+  assert.equal(store.branchOf(join(linked, 'a.txt')), 'refs/heads/feature');
+  assert.equal(store.branchOf(join(work, 'a.txt')), 'refs/heads/master');
+
+  const upstream = tempDir(t);
+  initRepository(upstream, 'trunk');
+  git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', upstream, 'sub');
+  assert.equal(store.branchOf(join(work, 'sub', 'a.txt')), 'refs/heads/trunk');
+  assert.equal(store.branchOf(join(work, 'a.txt')), 'refs/heads/master');
+});
+
+test('a branch switch makes that branch\'s entry unwritable, so a late Keep cannot cross branches', (t) => {
+  const { work, store } = setup(t);
+  const git = initRepository(work);
+  const file = join(work, 'a.txt');
+  writeFileSync(file, 'x');
+  store.createEntry({ path: file, existed: true, base: Buffer.from('x') });
+  const onMaster = store.idFor(file);
+
+  git('checkout', '-q', '-b', 'feature');
+  assert.equal(store.writeBase(onMaster, Buffer.from('kept elsewhere')), false);
+  assert.equal(store.removeEntry(onMaster), false);
+  assert.equal(store.readEntry(onMaster)?.base?.toString(), 'x');
+
+  git('checkout', '-q', 'master');
+  assert.equal(store.writeBase(onMaster, Buffer.from('kept here')), true);
 });
 
 test('createEntry stores the exact baseline bytes and metadata', (t) => {
@@ -827,6 +934,19 @@ test('staging records that a file did not exist', (t) => {
   const { work, store } = setup(t);
   store.stage('toolu_02', { path: join(work, 'new.txt'), existed: false, bytes: null });
   assert.deepEqual(store.readStaging('toolu_02'), { path: join(work, 'new.txt'), existed: false, bytes: null });
+});
+
+test('staging names the entry the file belonged to, so a later branch can tell it moved', (t) => {
+  const { work, store } = setup(t);
+  const git = initRepository(work);
+  const file = join(work, 'a.txt');
+  writeFileSync(file, 'x');
+  store.stage('toolu_04', { path: file, existed: true, bytes: Buffer.from('x'), id: store.idFor(file) });
+  const onMaster = store.readStaging('toolu_04');
+
+  git('checkout', '-q', '-b', 'feature');
+  assert.notEqual(store.idFor(file), onMaster?.id, 'the file now belongs to another entry');
+  assert.equal(onMaster?.path, file, 'and the staged record still names what it was');
 });
 
 test('readStaging is null for an unknown key and after dropStaging', (t) => {

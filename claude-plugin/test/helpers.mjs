@@ -2,7 +2,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 
 const PLUGIN_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -18,6 +18,23 @@ export function tempDir(t, prefix = 'pe-') {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+/**
+ * A git repository at `dir`, on `branch`, with one commit so the branch exists. Returns a function that
+ * runs git inside it. Git's global and system configuration are ignored, so a developer's signing,
+ * hooks or templates cannot prompt for a PIN or change what these tests see.
+ * @param {string} dir
+ * @param {string} [branch]
+ * @returns {(...args: string[]) => string}
+ */
+export function initRepository(dir, branch = 'master') {
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+  const git = (/** @type {string[]} */ ...args) =>
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd: dir, env, encoding: 'utf8' });
+  git('init', '-q', '-b', branch);
+  git('commit', '-q', '--allow-empty', '-m', 'init');
+  return git;
 }
 
 /**

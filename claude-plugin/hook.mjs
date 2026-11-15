@@ -140,7 +140,7 @@ function stageBeforeEdit(store, input) {
   // everything while a permission prompt is open, and then this is the only
   // record of what the file looked like before this edit.
   const { existed, bytes } = snapshot(path);
-  store.stage(key, { path, existed, bytes });
+  store.stage(key, { path, existed, bytes, id: store.idFor(path) });
 }
 
 /**
@@ -375,8 +375,14 @@ function chooseBaseline(store, staged, path, response) {
   const toolSaysCreated = response?.type === 'create';
 
   // Staging is only meaningful for the file the tool actually wrote; another
-  // hook may have rewritten the tool's path in between.
-  if (staged !== null && store.idFor(staged.path) === store.idFor(path)) {
+  // hook may have rewritten the tool's path in between. A switch between the
+  // two hooks would make the staged bytes another branch's, so a record that
+  // names its entry must still name the file's.
+  const sameEntry =
+    staged !== null &&
+    (staged.id === undefined || staged.id === store.idFor(staged.path)) &&
+    store.idFor(staged.path) === store.idFor(path);
+  if (sameEntry && staged !== null) {
     if (staged.bytes === null) {
       return response?.type === 'update' && original !== null ? textBaseline(original) : { existed: false, bytes: null };
     }
@@ -482,10 +488,11 @@ function sessionOf(input) {
  */
 function startSession(store, input) {
   store.sweep();
-  const sessionId = sessionOf(input);
+  const sessionId = sessionCursor(store, input);
+  if (sessionId === null) return;
   // A resumed session already has a cursor and keeps it, so discards made
   // while it was closed are announced on its next prompt.
-  if (sessionId !== null && store.getCursor(sessionId) === null) store.setCursor(sessionId, store.logSize());
+  if (store.getCursor(sessionId) === null) store.setCursor(sessionId, store.logSize());
 }
 
 /**
@@ -496,7 +503,7 @@ function startSession(store, input) {
  * @returns {string} JSON for stdout, or ''
  */
 function promptOutput(store, input) {
-  const sessionId = sessionOf(input);
+  const sessionId = sessionCursor(store, input);
   if (sessionId === null) return '';
 
   const cursor = store.getCursor(sessionId);
@@ -511,9 +518,12 @@ function promptOutput(store, input) {
   if (nextOffset !== cursor) store.setCursor(sessionId, nextOffset);
 
   // The log is machine-wide; only files under this session's directory are
-  // this session's business.
+  // this session's business, and only on the branch they were discarded on:
+  // a change discarded on one branch must not be announced on another.
   const projectDir = canonicalDir(typeof input.cwd === 'string' ? input.cwd : process.cwd());
-  const relevant = records.filter((record) => isInside(projectDir, record.path));
+  const relevant = records.filter(
+    (record) => isInside(projectDir, record.path) && (record.branch === undefined || record.branch === store.branchOf(record.path)),
+  );
   if (relevant.length === 0) return '';
 
   const lines = relevant.slice(0, MAX_NOTE_ENTRIES).map((record) => {
@@ -532,6 +542,24 @@ function promptOutput(store, input) {
   return JSON.stringify({
     hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: note.slice(0, MAX_NOTE_LENGTH) },
   });
+}
+
+/**
+ * The session's cursor name on the branch the prompt is sent from. Read
+ * position is per branch: a prompt on one branch must not consume the notes
+ * for another, and a resumed session on a branch it has not prompted on yet
+ * starts from the log's end there rather than replaying another branch's
+ * history.
+ * @param {Store} store
+ * @param {HookInput} input
+ * @returns {string | null}
+ */
+function sessionCursor(store, input) {
+  const sessionId = sessionOf(input);
+  if (sessionId === null) return null;
+  const dir = typeof input.cwd === 'string' && input.cwd !== '' ? input.cwd : process.cwd();
+  const branch = store.branchOfDir(dir);
+  return branch === null ? sessionId : `${sessionId}@${branch}`;
 }
 
 /**

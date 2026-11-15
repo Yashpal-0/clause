@@ -13,7 +13,7 @@ import {
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { openStore } from '../store.mjs';
-import { runHook, tempDir } from './helpers.mjs';
+import { initRepository, runHook, tempDir } from './helpers.mjs';
 
 /** Bytes a text-oriented store would corrupt: invalid UTF-8, NUL, CRLF, BOM. */
 const AWKWARD_BYTES = Buffer.from([0xef, 0xbb, 0xbf, 0x61, 0x0d, 0x0a, 0xff, 0xfe, 0x00, 0x62]);
@@ -525,6 +525,64 @@ test('a prompt after a discard tells Claude which file lost its edits, then stay
   assert.match(note, /src\/a\.ts/);
   assert.match(note, /lines 3-5/);
   assert.equal(additionalContext(run('prompt', common(work, { prompt: 'again' }))), '');
+});
+
+test('a discard made on another branch is not announced on this one', (t) => {
+  const { work, store, run } = setup(t);
+  const git = initRepository(work);
+  const file = join(work, 'a.ts');
+  writeFileSync(file, 'x');
+  run('session-start', common(work, { hook_event_name: 'SessionStart', source: 'startup' }));
+
+  store.appendDiscard({ path: file, scope: 'block', detail: 'one change' });
+  git('checkout', '-q', '-b', 'feature');
+  assert.equal(additionalContext(run('prompt', common(work, { prompt: 'next' }))), '');
+
+  git('checkout', '-q', 'master');
+  assert.match(additionalContext(run('prompt', common(work, { prompt: 'back' }))), /a\.ts/);
+});
+
+test('a discard made on another branch since the last prompt is not announced on this one', (t) => {
+  const { work, store, run } = setup(t);
+  const git = initRepository(work);
+  const file = join(work, 'a.ts');
+  writeFileSync(file, 'x');
+  run('session-start', common(work, { hook_event_name: 'SessionStart', source: 'startup' }));
+
+  git('checkout', '-q', '-b', 'feature');
+  store.appendDiscard({ path: file, scope: 'block', detail: 'one change' });
+  git('checkout', '-q', 'master');
+  assert.equal(additionalContext(run('prompt', common(work, { prompt: 'next' }))), '');
+});
+
+test("a branch switch between the edit hooks never makes the other branch's staged bytes a baseline", (t) => {
+  const { work, store, run } = setup(t);
+  const git = initRepository(work);
+  const file = join(work, 'a.txt');
+  writeFileSync(file, 'on master before');
+  run('pre', pre(work, file));
+
+  git('checkout', '-q', '-b', 'feature');
+  writeFileSync(file, 'on feature after');
+  run('post', post(work, file));
+
+  assert.equal(store.listEntries().length, 0, 'what the file held on feature is unknown, so no baseline is invented');
+  assert.equal(store.readStaging('toolu_1'), null);
+});
+
+test("a branch switch between the edit hooks takes the baseline from the tool's own report of the file", (t) => {
+  const { work, store, run } = setup(t);
+  const git = initRepository(work);
+  const file = join(work, 'a.txt');
+  writeFileSync(file, 'on master before');
+  run('pre', pre(work, file));
+
+  git('checkout', '-q', '-b', 'feature');
+  writeFileSync(file, 'on feature after');
+  run('post', post(work, file, { response: { originalFile: 'on feature before' } }));
+
+  assert.equal(store.readEntry(store.idFor(file))?.base?.toString(), 'on feature before', 'the tool reported what feature held, not master staged');
+  assert.equal(store.listEntries().length, 1);
 });
 
 test('the note to Claude does not claim that the discarded changes were its own', (t) => {

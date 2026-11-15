@@ -18,6 +18,13 @@
 // Entries are directories so that creating one is a single rename(2): the
 // first creator wins and a crash can never leave a baseline without its
 // metadata (or the reverse).
+//
+// Inside a git repository the id also covers the branch the file's repository
+// is on, so pending changes follow the branch: switching branches shows that
+// branch's changes, and switching back shows the old ones again. Outside one
+// the id is the path alone, exactly as before. An entry made before this was
+// recorded has the old, path-only id; the first branch that looks at it takes
+// it over, because nothing recorded which branch made it.
 
 import { createHash, randomBytes } from 'node:crypto';
 import {
@@ -100,6 +107,7 @@ const MAX_LINE = 1e9;
  * @property {string} path
  * @property {boolean} existed
  * @property {Buffer | null} bytes null exactly when `existed` is false
+ * @property {string} [id] the entry the file belonged to when staged; absent in records made before branches were recorded
  */
 
 /**
@@ -115,6 +123,7 @@ const MAX_LINE = 1e9;
  * @property {string} ts ISO timestamp
  * @property {string} path canonical absolute path
  * @property {'block' | 'file'} scope
+ * @property {string | null} [branch] the branch it was discarded on; absent in records made before branches were recorded
  * @property {string} [detail] short human-readable description, shown to Claude
  */
 
@@ -150,10 +159,58 @@ export function openStore(root = defaultRoot()) {
    * Stable identity of a file: its path after resolving symlinks, so the same
    * file reached through two routes is one entry. A file that does not exist
    * yet is resolved through its nearest existing parent.
+   *
+   * Inside a git repository the branch is part of the identity, so a change
+   * recorded on one branch stays there when the file moves to another. The
+   * branch is read from the repository's own files, not from git: a hook waits
+   * for nothing, and a lock held by the user's `git switch` must not fail it.
    * @param {string} path absolute
    */
   function idFor(path) {
-    return hash(canonicalPath(path));
+    const canonical = canonicalPath(path);
+    const branch = branchOf(canonical);
+    return branch === null ? hash(canonical) : scopedId(canonical, branch);
+  }
+
+  /**
+   * @param {string} canonical
+   * @param {string} branch
+   */
+  function scopedId(canonical, branch) {
+    return hash(`${branch}\0${canonical}`);
+  }
+
+  /**
+   * Takes over an entry made before entries carried their branch: it belongs to
+   * the branch that looks at it first, since nothing recorded which branch made
+   * it. A branch entry that already exists wins and the older one is left
+   * alone, still readable if this change is rolled back. Only the paths that
+   * choose the entry's directory or list it call this; asking for an id must
+   * not move anything.
+   * @param {string} legacy the path-only id
+   * @param {string} scoped the id on the current branch
+   * @returns {string} the id the entry has after the attempt
+   */
+  function adoptLegacyEntry(legacy, scoped) {
+    if (legacy === scoped) return scoped;
+    try {
+      renameSync(join(entriesDir, legacy), join(entriesDir, scoped));
+      fsyncDir(entriesDir);
+    } catch (error) {
+      if (!isMissing(error) && !isCode(error, 'EEXIST') && !isCode(error, 'ENOTEMPTY')) logError('adopt entry', error);
+    }
+    return scoped;
+  }
+
+  /**
+   * The directory a new entry for `canonical` goes in, taking over a path-only
+   * entry first when that branch has none.
+   * @param {string} canonical
+   * @param {string | null} branch
+   */
+  function entryIdFor(canonical, branch) {
+    if (branch === null) return hash(canonical);
+    return adoptLegacyEntry(hash(canonical), scopedId(canonical, branch));
   }
 
   /**
@@ -207,12 +264,14 @@ export function openStore(root = defaultRoot()) {
    * @returns {boolean} false if the file has an entry already
    */
   function publishEntry({ path, existed, base, createdAt, sessionDirs }) {
+    const canonical = canonicalPath(path);
+    const branch = branchOf(canonical);
     /** @type {Record<string, Buffer>} */
-    const files = { 'meta.json': metaFile({ path, existed, createdAt }) };
+    const files = { 'meta.json': metaFile({ path: canonical, existed, createdAt }) };
     if (base) files.base = base;
     if (sessionDirs.length > 0) files.sessions = Buffer.from(sessionsRecord(sessionDirs));
     mkdirp(entriesDir);
-    const created = publishDir(join(entriesDir, hash(path)), files);
+    const created = publishDir(join(entriesDir, entryIdFor(canonical, branch)), files);
     if (created) fsyncDir(entriesDir);
     return created;
   }
@@ -267,12 +326,48 @@ export function openStore(root = defaultRoot()) {
     }
   }
 
-  /** @returns {EntryMeta[]} every readable entry, without baseline bytes */
+  /**
+   * @returns {EntryMeta[]} every readable entry of the branch its file's
+   *   repository is on, without baseline bytes. Entries of other branches stay
+   *   in the store and are left out here, so switching a branch changes what
+   *   the editor lists without changing what is pending on either branch.
+   */
   function listEntries() {
-    return readNames(entriesDir)
+    const metas = readNames(entriesDir)
       .filter((name) => ID_PATTERN.test(name))
       .map((name) => readMeta(name))
       .filter((meta) => meta !== null);
+    /** @type {EntryMeta[]} */
+    const entries = [];
+    const seen = new Set();
+    for (const meta of metas) {
+      if (seen.has(meta.id)) continue;
+      // The id the file has on its branch now. An entry of another branch stays
+      // out; a path-only entry is taken over by the branch that lists it first.
+      let canonical;
+      try {
+        canonical = canonicalPath(meta.path);
+      } catch (error) {
+        logError(`list entry ${meta.id}`, error);
+        continue;
+      }
+      const branch = branchOf(canonical);
+      const current = branch === null ? hash(canonical) : scopedId(canonical, branch);
+      if (meta.id !== current && meta.id !== hash(canonical)) {
+        seen.add(meta.id);
+        continue;
+      }
+      if (seen.has(current)) {
+        seen.add(meta.id);
+        continue;
+      }
+      const id = meta.id === current ? current : entryIdFor(canonical, branch);
+      const entry = readMeta(id);
+      seen.add(meta.id);
+      seen.add(current);
+      if (entry !== null) entries.push(entry);
+    }
+    return entries;
   }
 
   /**
@@ -291,7 +386,8 @@ export function openStore(root = defaultRoot()) {
    */
   function writeBase(id, bytes) {
     const meta = readMeta(id);
-    if (!meta) return false;
+    // An entry is only writable while its file still belongs to its branch.
+    if (!meta || idFor(meta.path) !== id) return false;
     const existed = bytes !== null;
     try {
       if (bytes !== null) replaceFile(id, 'base', bytes);
@@ -330,6 +426,8 @@ export function openStore(root = defaultRoot()) {
    * @returns {boolean} false if there was no such entry
    */
   function removeEntry(id) {
+    const meta = readMeta(id);
+    if (meta !== null && idFor(meta.path) !== id) return false;
     const grave = join(trashDir, `${id}.${uniqueSuffix()}`);
     mkdirp(trashDir);
     try {
@@ -456,12 +554,13 @@ export function openStore(root = defaultRoot()) {
    * @param {string} key tool call id (any string; hashed if it is not filename-safe)
    * @param {Staged} staged
    */
-  function stage(key, { path, existed, bytes }) {
+  function stage(key, { path, existed, bytes, id }) {
     if (existed !== (bytes !== null)) {
       throw new TypeError('stage: bytes are required exactly when the file existed');
     }
+    const meta = { path, existed, ...(typeof id === 'string' && ID_PATTERN.test(id) ? { id } : {}) };
     /** @type {Record<string, Buffer>} */
-    const files = { 'meta.json': Buffer.from(JSON.stringify({ path, existed })) };
+    const files = { 'meta.json': Buffer.from(JSON.stringify(meta)) };
     if (bytes) files.base = bytes;
     const final = join(stagingDir, safeName(key));
     mkdirp(stagingDir);
@@ -478,7 +577,7 @@ export function openStore(root = defaultRoot()) {
     try {
       const meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
       const bytes = meta.existed ? readFileSync(join(dir, 'base')) : null;
-      return { path: meta.path, existed: meta.existed, bytes };
+      return { path: meta.path, existed: meta.existed, bytes, ...(typeof meta.id === 'string' && ID_PATTERN.test(meta.id) ? { id: meta.id } : {}) };
     } catch (error) {
       if (isMissing(error)) return null;
       throw error;
@@ -592,8 +691,9 @@ export function openStore(root = defaultRoot()) {
    * @param {{ path: string, scope: 'block' | 'file', detail?: string }} discard
    */
   function appendDiscard({ path, scope, detail }) {
+    const branch = branchOf(canonicalPath(path));
     /** @type {DiscardRecord} */
-    const record = { v: FORMAT_VERSION, ts: new Date().toISOString(), path, scope };
+    const record = { v: FORMAT_VERSION, ts: new Date().toISOString(), path, scope, branch };
     if (detail !== undefined) record.detail = detail.slice(0, MAX_DETAIL);
     mkdirp(root);
     const fd = openSync(logFile, 'a', 0o600);
@@ -753,6 +853,39 @@ export function openStore(root = defaultRoot()) {
   return Object.freeze({
     root,
     idFor,
+    branchOf,
+    /**
+     * The git directory of the repository `path` is in, so an editor can watch
+     * its HEAD and re-list when the branch changes. Null outside a repository.
+     * @param {string} path
+     */
+    gitDirFor(path) {
+      try {
+        const canonical = canonicalPath(path);
+        let dir = canonical;
+        try {
+          if (!statSync(canonical).isDirectory()) dir = dirname(canonical);
+        } catch {
+          dir = dirname(canonical);
+        }
+        return gitDirOf(dir);
+      } catch {
+        return null;
+      }
+    },
+    /**
+     * The ref the repository holding `dir` is on, or null outside one. A
+     * session's discard note is read once per branch, so a discard made on
+     * another branch is still there to announce when that branch comes back.
+     * @param {string} dir
+     */
+    branchOfDir(dir) {
+      try {
+        return branchOfDirectory(canonicalPath(dir));
+      } catch {
+        return null;
+      }
+    },
     ensureEntriesDir,
     entryDir,
     createEntry,
@@ -784,6 +917,91 @@ export function openStore(root = defaultRoot()) {
 
 const ID_PATTERN = /^[0-9a-f]{1,64}$/;
 const FILENAME_SAFE = /^[A-Za-z0-9_-]{1,128}$/;
+
+/** A full ref name, which is hashed rather than used as a path; only a hostile one is refused. */
+const REF_PATTERN = /^refs\/\S+$/;
+const MAX_REF_LENGTH = 1024;
+const MAX_HEAD_BYTES = 4096;
+
+/** What HEAD holds in a repository using the reftable ref format, whose real HEAD is not in that file. */
+const REFTABLE_HEAD_REF = 'refs/heads/.invalid';
+
+/** A `.git` file that names the directory it lives in, as a worktree or submodule has. */
+const MAX_GITDIR_FILE_BYTES = 16 * 1024;
+
+/**
+ * The ref the file's repository is on. Read from `.git` directly rather than by
+ * running git, which would cost a process per edit and can wait on a lock the
+ * user's own `git switch` holds. Null outside a repository, with a detached
+ * HEAD (a commit is not a branch, and the current, path-only behaviour applies),
+ * in a reftable repository (its branch cannot be read without git), or when HEAD
+ * cannot be read.
+ * @param {string} file canonical absolute path of the file
+ * @returns {string | null}
+ */
+function branchOf(file) {
+  return branchOfDirectory(dirname(file));
+}
+
+/**
+ * @param {string} dir canonical absolute path
+ * @returns {string | null} see `branchOf`
+ */
+function branchOfDirectory(dir) {
+  try {
+    const gitDir = gitDirOf(dir);
+    if (gitDir === null) return null;
+    const head = readCappedText(join(gitDir, 'HEAD'), MAX_HEAD_BYTES)?.trim();
+    if (head === undefined) return null;
+    const ref = /^ref:\s*(\S+)$/.exec(head)?.[1];
+    return ref !== undefined && ref.length <= MAX_REF_LENGTH && REF_PATTERN.test(ref) && ref !== REFTABLE_HEAD_REF ? ref : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string} path
+ * @param {number} maxBytes
+ * @returns {string | null} null when the file is missing or larger than `maxBytes`
+ */
+function readCappedText(path, maxBytes) {
+  try {
+    if (statSync(path).size > maxBytes) return null;
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The git directory of the nearest repository at or above `dir`, for a normal
+ * checkout, a worktree (`.git` is a file naming the worktree's own git dir) and
+ * a submodule alike.
+ * @param {string} dir
+ * @returns {string | null}
+ */
+function gitDirOf(dir) {
+  let current = dir;
+  for (;;) {
+    const candidate = join(current, '.git');
+    try {
+      const named = statSync(candidate).isDirectory()
+        ? candidate
+        : /^gitdir:\s*(.+)$/m.exec(readCappedText(candidate, MAX_GITDIR_FILE_BYTES) ?? '')?.[1]?.trim();
+      // A real repository has a HEAD to read. An empty `.git` left behind by
+      // something else must not turn every file under it into a branch entry.
+      if (named !== undefined && readCappedText(join(resolve(current, named), 'HEAD'), MAX_HEAD_BYTES) !== null) {
+        return resolve(current, named);
+      }
+    } catch (error) {
+      if (!isMissing(error)) return null;
+    }
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
 
 /** @param {string} text */
 function hash(text) {

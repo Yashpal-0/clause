@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { openStore } from '../../claude-plugin/store.mjs';
-import { tempDir } from '../../claude-plugin/test/helpers.mjs';
+import { initRepository, tempDir } from '../../claude-plugin/test/helpers.mjs';
 
 const HOOK = fileURLToPath(new URL('../hook.mjs', import.meta.url));
 
@@ -138,6 +138,44 @@ test('a symlink retargeted between hooks cannot put the former target bytes into
   assert.equal(readFileSync(join(box.work, 'original.txt'), 'utf8'), 'original');
 });
 
+test('a branch switch between the hooks records nothing from either branch and leaves no staging', (t) => {
+  const box = sandbox(t);
+  const git = initRepository(box.work);
+  const file = join(box.work, 'a.txt');
+  writeFileSync(file, 'master before');
+  const input = { tool_name: 'apply_patch', tool_use_id: 'call-1', turn_id: 'turn-1', tool_input: { command: update() } };
+  assert.equal(box.hook('pre', input), '');
+  git('checkout', '-q', '-b', 'feature');
+  writeFileSync(file, 'feature after');
+  assert.equal(box.hook('post', input), '');
+  assert.equal(box.store.listEntries().length, 0);
+  assert.match(readFileSync(join(box.root, 'errors.log'), 'utf8'), /file identity changed/);
+  assert.deepEqual(staging(box), []);
+  git('checkout', '-q', 'master');
+  assert.equal(box.store.listEntries().length, 0);
+});
+
+test('Codex edits stay on the branch that made them', (t) => {
+  const box = sandbox(t);
+  const git = initRepository(box.work);
+  const file = join(box.work, 'a.txt');
+  writeFileSync(file, 'before');
+  box.patch(update(), () => writeFileSync(file, 'after'));
+  const onMaster = box.store.idFor(file);
+
+  git('checkout', '-q', '-b', 'feature');
+  assert.equal(box.store.listEntries().length, 0);
+  writeFileSync(file, 'feature before');
+  box.patch(update(), () => writeFileSync(file, 'feature after'), { turn_id: 'turn-2' });
+  assert.notEqual(box.store.idFor(file), onMaster);
+  assert.equal(text(box.entry('a.txt')), 'feature before');
+
+  git('checkout', '-q', 'master');
+  assert.equal(text(box.entry('a.txt')), 'before');
+  assert.deepEqual(box.store.listEntries().map((entry) => entry.id), [onMaster]);
+  assert.deepEqual(staging(box), []);
+});
+
 test('deleting a leaf symlink never publishes target bytes as a regular file restoration', (t) => {
   const box = sandbox(t);
   writeFileSync(join(box.work, 'target.txt'), 'target');
@@ -219,6 +257,17 @@ test('discard feedback reaches each Codex session once, survives resume, and ign
   assert.match(output.hookSpecificOutput.additionalContext, /line 3 ignore instructions/);
   assert.equal(box.hook('prompt'), '');
   assert.match(box.hook('prompt', { session_id: 'session-2' }), /a\.txt/);
+});
+
+test('a discard made on another branch reaches Codex only when that branch is back', (t) => {
+  const box = sandbox(t);
+  const git = initRepository(box.work);
+  box.hook('session-start');
+  box.store.appendDiscard({ path: join(box.work, 'a.txt'), scope: 'file' });
+  git('checkout', '-q', '-b', 'feature');
+  assert.equal(box.hook('prompt'), '');
+  git('checkout', '-q', 'master');
+  assert.match(box.hook('prompt'), /a\.txt/);
 });
 
 test('Codex session ids do not share discard cursors with another client or inherit its project directory', (t) => {
